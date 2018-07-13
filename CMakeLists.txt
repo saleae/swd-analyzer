@@ -21,13 +21,4 @@ src/SWDUtils.cpp
 src/SWDUtils.h
 )
 
-add_library(swd_analyzer SHARED ${SOURCES})
-target_link_libraries(swd_analyzer PRIVATE Saleae::AnalyzerSDK)
-
-if(MSVC)
-    install(TARGETS swd_analyzer RUNTIME DESTINATION "Analyzers")
-else()
-    install(TARGETS swd_analyzer LIBRARY DESTINATION "Analyzers")
-endif()
-
-set_post_build_destination(swd_analyzer)
+add_analyzer_plugin(swd_analyzer SOURCES ${SOURCES})
