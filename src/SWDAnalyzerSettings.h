@@ -8,22 +8,22 @@
 
 class SWDAnalyzerSettings : public AnalyzerSettings
 {
-public:
-	SWDAnalyzerSettings();
-	virtual ~SWDAnalyzerSettings();
+  public:
+    SWDAnalyzerSettings();
+    virtual ~SWDAnalyzerSettings();
 
-	virtual bool SetSettingsFromInterfaces();
-	virtual void LoadSettings(const char* settings);
-	virtual const char* SaveSettings();
+    virtual bool SetSettingsFromInterfaces();
+    virtual void LoadSettings( const char* settings );
+    virtual const char* SaveSettings();
 
-	void UpdateInterfacesFromSettings();
+    void UpdateInterfacesFromSettings();
 
-	Channel		mSWDIO;
-	Channel		mSWCLK;
+    Channel mSWDIO;
+    Channel mSWCLK;
 
-protected:
-	AnalyzerSettingInterfaceChannel		mSWDIOInterface;
-	AnalyzerSettingInterfaceChannel		mSWCLKInterface;
+  protected:
+    AnalyzerSettingInterfaceChannel mSWDIOInterface;
+    AnalyzerSettingInterfaceChannel mSWCLKInterface;
 };
 
-#endif	// SWD_ANALYZER_SETTINGS_H
+#endif // SWD_ANALYZER_SETTINGS_H
