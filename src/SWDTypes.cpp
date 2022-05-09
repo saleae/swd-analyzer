@@ -13,6 +13,7 @@
 const int TRAN_REQ_AND_ACK = 8 + 1 + 3;             // request/turnaround/ACK
 const int TRAN_READ_LENGTH = TRAN_REQ_AND_ACK + 33; // previous + 32bit data + parity
 const int TRAN_WRITE_LENGTH = TRAN_READ_LENGTH + 1; // previous + one bit for turnaround
+const int TRAN_JTAG_TO_SWD = 16;
 
 S64 SWDBit::GetMinStartEnd() const
 {
@@ -108,7 +109,12 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
     // data
     f = bi->MakeFrame();
     f.mEndingSampleInclusive = bi[ 31 ].GetEndSample();
-    f.mType = SWDFT_WData;
+    if( IsRead() )
+    {
+        f.mType = SWDFT_RData;
+    } else {
+        f.mType = SWDFT_WData;
+    }
     f.mData1 = data;
     f.mData2 = reg;
     pResults->AddFrame( f );
@@ -147,14 +153,9 @@ void SWDOperation::AddMarkers( SWDAnalyzerResults* pResults )
         if( ndx == 8 || ndx == 12 && !IsRead() )
             pResults->AddMarker( ( bi->falling + bi->rising ) / 2, AnalyzerResults::X, pResults->GetSettings()->mSWCLK );
 
-        // write
-        else if( ndx < 8 || ndx > 12 && !IsRead() )
-            pResults->AddMarker( bi->falling, bi->state_falling == BIT_HIGH ? AnalyzerResults::One : AnalyzerResults::Zero,
-                                 pResults->GetSettings()->mSWCLK );
-        // read
-        else
-            pResults->AddMarker( bi->rising, bi->state_rising == BIT_HIGH ? AnalyzerResults::One : AnalyzerResults::Zero,
-                                 pResults->GetSettings()->mSWCLK );
+        // Data is always sampled by both ends on the rising edge.
+        pResults->AddMarker( bi->rising, bi->state_rising == BIT_HIGH ? AnalyzerResults::One : AnalyzerResults::Zero,
+                                pResults->GetSettings()->mSWCLK );
     }
 }
 
@@ -237,6 +238,19 @@ void SWDLineReset::AddFrames( AnalyzerResults* pResults )
 }
 
 // ********************************************************************************
+
+void SWDJtagToSwd::AddFrames( AnalyzerResults* pResults )
+{
+    Frame f;
+    f.mStartingSampleInclusive = bits.front().GetStartSample();
+    f.mEndingSampleInclusive = bits.back().GetEndSample();
+    f.mType = SWDFT_JtagToSwd;
+    f.mData1 = bits.size();
+    pResults->AddFrame( f );
+}
+
+// ********************************************************************************
+
 
 SWDParser::SWDParser() : mSWDIO( 0 ), mSWCLK( 0 )
 {
@@ -488,6 +502,24 @@ bool SWDParser::IsLineReset( SWDLineReset& reset )
 
     // keep the high bit because that one is probably next operation's start bit
     mBitsBuffer.push_back( bit );
+
+    return true;
+}
+
+bool SWDParser::IsJtagToSwd( SWDJtagToSwd& jtagToSwd ) {
+    jtagToSwd.Clear();
+    uint16_t sequence = 0b0111100111100111;
+    for( size_t cnt = 0; cnt < 16; cnt++ )
+    {
+        if( cnt >= mBitsBuffer.size() )
+            mBitsBuffer.push_back( ParseBit() );
+
+        if( mBitsBuffer[ cnt ].IsHigh() != ( ( sequence >> ( 15 - cnt ) ) & 0b1 ) )
+            return false;
+    }
+
+    jtagToSwd.bits = mBitsBuffer;
+    mBitsBuffer.clear();
 
     return true;
 }
