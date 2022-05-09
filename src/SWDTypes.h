@@ -12,11 +12,13 @@ enum SWDFrameTypes
     SWDFT_Bit,
 
     SWDFT_LineReset,
+    SWDFT_JtagToSwd,
 
     SWDFT_Request,
     SWDFT_Turnaround,
     SWDFT_ACK,
     SWDFT_WData,
+    SWDFT_RData,
     SWDFT_DataParity,
     SWDFT_TrailingBits,
 };
@@ -131,6 +133,18 @@ struct SWDLineReset
     void AddFrames( AnalyzerResults* pResults );
 };
 
+struct SWDJtagToSwd
+{
+    std::vector<SWDBit> bits;
+
+    void Clear()
+    {
+        bits.clear();
+    }
+
+    void AddFrames( AnalyzerResults* pResults );
+};
+
 struct SWDRequestFrame : public Frame
 {
     // mData1 contains addr, mData2 contains the register enum
@@ -207,6 +221,7 @@ class SWDParser
 
     bool IsOperation( SWDOperation& tran );
     bool IsLineReset( SWDLineReset& reset );
+    bool IsJtagToSwd( SWDJtagToSwd& jtagToSwd );
 
     SWDBit PopFrontBit();
 };

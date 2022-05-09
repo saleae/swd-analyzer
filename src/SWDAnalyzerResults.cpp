@@ -69,6 +69,13 @@ void SWDAnalyzerResults::GetBubbleText( const Frame& f, DisplayBase display_base
         results.push_back( "reset" );
         results.push_back( "Line Reset" );
     }
+    else if ( f.mType == SWDFT_JtagToSwd )
+    {
+        results.push_back( "JTAG to SWD sequence" );
+        results.push_back( "JtS" );
+        results.push_back( "JTAGtoSWD" );
+        results.push_back( "JTAG to SWD" );
+    }
     else if( f.mType == SWDFT_Turnaround )
     {
         results.push_back( "Turnaround" );
@@ -102,18 +109,18 @@ void SWDAnalyzerResults::GetBubbleText( const Frame& f, DisplayBase display_base
 
         results.push_back( "ACK" );
     }
-    else if( f.mType == SWDFT_WData )
+    else if( ( f.mType == SWDFT_WData ) || ( f.mType == SWDFT_RData ) )
     {
         std::string data_str( int2str_sal( f.mData1, display_base, 32 ) );
         SWDRegisters reg( SWDRegisters( f.mData2 ) );
         std::string reg_name( GetRegisterName( reg ) );
         std::string reg_value( GetRegisterValueDesc( reg, U32( f.mData1 ), display_base ) );
-
+        std::string prefix = ( f.mType == SWDFT_WData ) ? "WData" : "RData";
         if( !reg_value.empty() )
-            results.push_back( "WData " + data_str + " reg " + reg_name + " bits " + reg_value );
-        results.push_back( "WData " + data_str + " reg " + reg_name );
-        results.push_back( "WData" );
-        results.push_back( "WData " + data_str );
+            results.push_back( prefix + " " + data_str + " reg " + reg_name + " bits " + reg_value );
+        results.push_back( prefix + " " + data_str + " reg " + reg_name );
+        results.push_back( prefix );
+        results.push_back( prefix + " " + data_str );
     }
     else if( f.mType == SWDFT_DataParity )
     {
@@ -212,6 +219,13 @@ void SWDAnalyzerResults::GenerateExportFile( const char* file, DisplayBase displ
 
             record.push_back( GetSampleTimeStr( f.mStartingSampleInclusive ) );
             record.push_back( "Line reset" );
+            SaveRecord( record, of );
+        }
+        else if( f.mType == SWDFT_JtagToSwd)
+        {
+            SaveRecord( record, of );
+            record.push_back( GetSampleTimeStr( f.mStartingSampleInclusive ) );
+            record.push_back( "JTAG to SWD Sequence" );
             SaveRecord( record, of );
         }
         else if( f.mType == SWDFT_Request )

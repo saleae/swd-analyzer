@@ -41,6 +41,7 @@ void SWDAnalyzer::WorkerThread()
     // on calls to IsOperation or IsLineReset
     SWDOperation tran;
     SWDLineReset reset;
+    SWDJtagToSwd jtagToSwd;
     SWDBit error_bit;
 
     mSWDParser.Clear();
@@ -63,6 +64,11 @@ void SWDAnalyzer::WorkerThread()
         {
             reset.AddFrames( mResults.get() );
 
+            mResults->CommitResults();
+        }
+        else if( mSWDParser.IsJtagToSwd( jtagToSwd ) )
+        {
+            jtagToSwd.AddFrames( mResults.get() );
             mResults->CommitResults();
         }
         else
