@@ -251,7 +251,7 @@ void SWDAnalyzerResults::GenerateExportFile( const char* file, DisplayBase displ
             else
                 record.push_back( "<disc>" );
         }
-        else if( f.mType == SWDFT_WData )
+        else if( (f.mType == SWDFT_WData) || (f.mType == SWDFT_RData) )
         {
             record.push_back( int2str_sal( f.mData1, display_base, 32 ) );
 
