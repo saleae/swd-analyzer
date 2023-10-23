@@ -47,10 +47,11 @@ void SWDAnalyzerResults::GetBubbleText( const Frame& f, DisplayBase display_base
         SWDRequestFrame& req( ( SWDRequestFrame& )f );
 
         std::string addr_str( int2str_sal( req.GetAddr(), display_base, 4 ) );
+        std::string reg_hex( int2str_sal( req.mData1, display_base, 4 ) );
         std::string reg_name( req.GetRegisterName() );
 
         results.push_back( std::string( "Request " ) + ( req.IsAccessPort() ? " AccessPort" : " DebugPort" ) +
-                           ( req.IsRead() ? " Read" : " Write" ) + " " + reg_name );
+                           ( req.IsRead() ? " Read" : " Write" ) + " " + reg_name + " (" + reg_hex + ")" );
 
         results.push_back( int2str_sal( req.mData2, display_base ) );
         results.push_back( "rq" );
