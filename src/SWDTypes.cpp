@@ -1015,6 +1015,10 @@ std::string SWDRequestFrame::GetRegisterName() const
 
 // ********************************************************************************
 
+const U16 SWDParser::SEQUENCE_JTAG_SERIAL = 0x0000u;         // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
+const U8 SWDParser::SEQUENCE_SW_DP = 0x1Au;            // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
+const U8 SWDParser::SEQUENCE_JTAG_DP = 0x0Au;                  // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
+
 SWDBit SWDParser::ParseBit()
 {
     SWDBit rbit;
@@ -1331,6 +1335,8 @@ bool SWDParser::IsOperation()
         reqByte |= ( mBitsBuffer[ cnt ].IsHigh() ? 0x80u : 0u );
     }
     mTran.requestByte = reqByte;
+    bool isTargetSel = ( reqByte == 0x99u ); // During the response phase of a write to the TARGETSEL register, the target does not drive the line.
+                                             // So ACK bits shouldn't be analysed
 
     SWDRequestByte requestByte(reqByte);
 
@@ -1356,7 +1362,7 @@ bool SWDParser::IsOperation()
                 ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 2u ].stateRising == BIT_HIGH ? ( 1u << 2u ) : 0u );
 
     // handling non-OK response if Overrun detection is not enabled
-    if( !mTran.orundetect && ( mTran.reqAck != static_cast<U8>( SWDAcks::ACK_OK ) ) )
+    if( !mTran.orundetect && !isTargetSel && ( mTran.reqAck != static_cast<U8>( SWDAcks::ACK_OK ) ) )
     {
         size_t badTranLength = 8u + mTran.GetTurnaroundNumber() + 3u;
         if( ( mTran.reqAck == static_cast<U8>( SWDAcks::ACK_WAIT ) ) || ( mTran.reqAck == static_cast<U8>( SWDAcks::ACK_FAULT ) ) )

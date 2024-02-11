@@ -9,9 +9,9 @@ struct VersionInfo
     uint8_t minor;
     uint16_t patch;
     uint32_t build;
-    char *date;
-    char *time;
-    char *hash;
+    const char *date;
+    const char *time;
+    const char *hash;
 };
 
 #endif // VERSIONINFO_H

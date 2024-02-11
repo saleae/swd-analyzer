@@ -658,9 +658,9 @@ class SWDParser
     U32 mSelectRegister;
 
     // consts
-    static const U16 SEQUENCE_JTAG_SERIAL = 0x0000u; // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
-    static const U8 SEQUENCE_SW_DP = 0x1Au;          // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
-    static const U8 SEQUENCE_JTAG_DP = 0x0Au;        // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
+    static const U16 SEQUENCE_JTAG_SERIAL; // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
+    static const U8 SEQUENCE_SW_DP;        // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
+    static const U8 SEQUENCE_JTAG_DP;      // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
 
     SWDBit ParseBit();
     void CopyBits( std::deque<SWDBit>& destination, const size_t numBits );
