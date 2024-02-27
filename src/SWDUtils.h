@@ -11,12 +11,12 @@
 
 // returns string descriptions of the register name and the bits with values
 std::string GetRegisterName( SWDRegisters reg );
-std::string GetRegisterValueDesc( SWDRegisters reg, U32 val, DisplayBase display_base );
+std::string GetRegisterValueDesc( SWDRegisters reg, U32 val, DisplayBase displayBase, DPVersion version );
 
-std::string int2str_sal( const U64 i, DisplayBase base, const int max_bits = 8 );
-inline std::string int2str( const U64 i )
+std::string Int2StrSal( const U64 i, DisplayBase base, const U32 maxBits = 8 );
+inline std::string Int2Str( const U64 i )
 {
-    return int2str_sal( i, Decimal, 64 );
+    return Int2StrSal( i, Decimal, 64 );
 }
 
 /*

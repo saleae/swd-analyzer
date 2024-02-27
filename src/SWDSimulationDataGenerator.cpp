@@ -13,7 +13,7 @@ struct SimulationData
     U32 data;
 };
 
-SimulationData simul_data[] = {
+SimulationData simulData[] = {
     { 0xA5, 0x0BB11477 }, { 0xA5, 0x0BB11477 }, { 0x81, 0x0000001E }, { 0xA9, 0x50000000 }, { 0x8D, 0xF0000000 }, { 0xB1, 0x000000F0 },
     { 0x9F, 0x00000000 }, { 0xB7, 0x04770021 }, { 0xBD, 0xF0000003 }, { 0xB1, 0x00000000 }, { 0xA3, 0x23000012 }, { 0x8B, 0xF0000000 },
     { 0x9F, 0x00000000 }, { 0x9F, 0xF00FF003 }, { 0xA5, 0x0BB11477 }, { 0x81, 0x0000001E }, { 0xA9, 0x50000000 }, { 0x8D, 0xF0000040 },
@@ -758,7 +758,7 @@ SimulationData simul_data[] = {
     { 0x00, 0x00000000 },
 };
 
-SWDSimulationDataGenerator::SWDSimulationDataGenerator()
+SWDSimulationDataGenerator::SWDSimulationDataGenerator() : mSettings(), mSimulationSampleRateHz(), mSimulCnt(), mSWDIO(), mSWCLK()
 {
 }
 
@@ -766,31 +766,31 @@ SWDSimulationDataGenerator::~SWDSimulationDataGenerator()
 {
 }
 
-void SWDSimulationDataGenerator::Initialize( U32 simulation_sample_rate, SWDAnalyzerSettings* settings )
+void SWDSimulationDataGenerator::Initialize( U32 simulationSampleRate, SWDAnalyzerSettings* settings )
 {
-    mSimulationSampleRateHz = simulation_sample_rate;
+    mSimulationSampleRateHz = simulationSampleRate;
     mSettings = settings;
 
-    mClockGenerator.Init( simulation_sample_rate / 10, simulation_sample_rate );
+    mClockGenerator.Init( simulationSampleRate / 10, simulationSampleRate );
 
     mSWDIO = mSWDSimulationChannels.Add( settings->mSWDIO, mSimulationSampleRateHz, BIT_LOW );
     mSWCLK = mSWDSimulationChannels.Add( settings->mSWCLK, mSimulationSampleRateHz, BIT_LOW );
 
     // start from the end to force a line reset in GenerateSimulationData
-    mSimulCnt = sizeof( simul_data ) / sizeof( SimulationData ) - 1;
+    mSimulCnt = sizeof( simulData ) / sizeof( SimulationData ) - 1;
 }
 
-U32 SWDSimulationDataGenerator::GenerateSimulationData( U64 largest_sample_requested, U32 sample_rate,
-                                                        SimulationChannelDescriptor** simulation_channels )
+U32 SWDSimulationDataGenerator::GenerateSimulationData( U64 largestSampleRequested, U32 sampleRate,
+                                                        SimulationChannelDescriptor** simulationChannels )
 {
-    U64 adjusted_largest_sample_requested =
-        AnalyzerHelpers::AdjustSimulationTargetSample( largest_sample_requested, sample_rate, mSimulationSampleRateHz );
+    U64 adjustedLargestSampleRequested =
+        AnalyzerHelpers::AdjustSimulationTargetSample( largestSampleRequested, sampleRate, mSimulationSampleRateHz );
 
     // while the caller needs more samples
-    while( mSWCLK->GetCurrentSampleNumber() < adjusted_largest_sample_requested )
+    while( mSWCLK->GetCurrentSampleNumber() < adjustedLargestSampleRequested )
     {
         // if we've reached the end of the array of data
-        if( simul_data[ mSimulCnt ].request == 0 )
+        if( simulData[ mSimulCnt ].request == 0 )
         {
             // pause, reset and restart the data
             AdvanceAllBySec( 0.01 );
@@ -799,29 +799,34 @@ U32 SWDSimulationDataGenerator::GenerateSimulationData( U64 largest_sample_reque
         }
 
         // shortcut to the simulated data object
-        const SimulationData& sim( simul_data[ mSimulCnt ] );
+        const SimulationData& sim( simulData[ mSimulCnt ] );
 
         // the request and ACK with turnarounds
         // we need the first data bit to prepare the data line
-        bool is_write = OutputRequest( sim.request, ACK_OK, ( sim.data & 1 ) ? BIT_HIGH : BIT_LOW );
-        OutputData( sim.data, is_write ); // the WData part with parity
+        bool isWrite = OutputRequest( sim.request, static_cast<U8>( SWDAcks::ACK_OK ), ( sim.data & 1 ) ? BIT_HIGH : BIT_LOW );
+        OutputData( sim.data, isWrite ); // the WData part with parity
 
         mSimulCnt++;
 
         // have we reached the end of the data?
-        if( simul_data[ mSimulCnt ].request == 0 )
+        if( simulData[ mSimulCnt ].request == 0 )
         {
             // show a fault and wait response
-            OutputRequest( 0xA5, ACK_FAULT, BIT_HIGH );
+            OutputRequest( 0xA5, static_cast<U8>( SWDAcks::ACK_FAULT ), BIT_HIGH );
             AdvanceAllBySec( TENTH_US * 100 );
-            OutputRequest( 0xB1, ACK_WAIT, BIT_LOW );
+            OutputRequest( 0xB1, static_cast<U8>( SWDAcks::ACK_WAIT ), BIT_LOW );
             AdvanceAllBySec( TENTH_US * 100 );
         }
     }
 
-    *simulation_channels = mSWDSimulationChannels.GetArray();
+    *simulationChannels = mSWDSimulationChannels.GetArray();
 
     return mSWDSimulationChannels.GetCount();
+}
+
+void SWDSimulationDataGenerator::AdvanceAllBySec( double sec )
+{
+    mSWDSimulationChannels.AdvanceAll( mClockGenerator.AdvanceByTimeS( sec ) );
 }
 
 void SWDSimulationDataGenerator::OutputWriteBit( BitState state )
@@ -837,15 +842,15 @@ void SWDSimulationDataGenerator::OutputWriteBit( BitState state )
     AdvanceAllBySec( TENTH_US * 3 );
 }
 
-void SWDSimulationDataGenerator::OutputReadBit( BitState first_half, BitState second_half )
+void SWDSimulationDataGenerator::OutputReadBit( BitState firstHalf, BitState secondHalf )
 {
-    mSWDIO->TransitionIfNeeded( first_half );
+    mSWDIO->TransitionIfNeeded( firstHalf );
 
     AdvanceAllBySec( TENTH_US * 3 );
 
     mSWCLK->Transition(); // CLK goes high
     AdvanceAllBySec( TENTH_US * 2 );
-    mSWDIO->TransitionIfNeeded( second_half );
+    mSWDIO->TransitionIfNeeded( secondHalf );
     AdvanceAllBySec( TENTH_US * 2 );
     mSWCLK->Transition(); // CLK goes low
 
@@ -875,9 +880,9 @@ void SWDSimulationDataGenerator::OutputTurnaround( BitState state )
     AdvanceAllBySec( TENTH_US * 10 );
 }
 
-bool SWDSimulationDataGenerator::OutputRequest( U8 req, U8 ack, BitState first_data_bit )
+bool SWDSimulationDataGenerator::OutputRequest( U8 req, U8 ack, BitState firstDataBit )
 {
-    bool is_write = ( req & 0x04 ) == 0;
+    bool isWrite = ( req & 0x04 ) == 0;
 
     // the request
     U8 bmask;
@@ -894,51 +899,51 @@ bool SWDSimulationDataGenerator::OutputRequest( U8 req, U8 ack, BitState first_d
 
     OutputReadBit( s1, s2 );
     OutputReadBit( s2, s3 );
-    OutputReadBit( s3, first_data_bit );
+    OutputReadBit( s3, firstDataBit );
 
     // turnaround (if needed)
-    if( is_write && ack == ACK_OK )
-        OutputTurnaround( first_data_bit );
+    if( isWrite && (ack == static_cast<U8>( SWDAcks::ACK_OK ) ) )
+        OutputTurnaround( firstDataBit );
 
-    return is_write;
+    return isWrite;
 }
 
-void SWDSimulationDataGenerator::OutputData( U32 data, bool is_write )
+void SWDSimulationDataGenerator::OutputData( U32 data, bool isWrite )
 {
     // the 32 data bits
-    U32 bmask;
-    U8 num_bits = 0;
-    BitState parity_bit, next_bit;
-    for( bmask = 1; bmask != 0; bmask <<= 1 )
+    U8 numBits = 0u;
+    BitState parityBit = BIT_HIGH;
+    for( U32 bmask = 1; bmask != 0; bmask <<= 1 )
     {
-        const bool is_last_bit = bmask == 0x80000000;
+        const bool isLastByte = (bmask == 0x80000000u);
 
         if( data & bmask )
-            ++num_bits;
+            ++numBits;
 
-        if( is_last_bit )
-            parity_bit = ( num_bits & 1 ) ? BIT_HIGH : BIT_LOW;
+        if( isLastByte )
+            parityBit = ( numBits & 1 ) ? BIT_HIGH : BIT_LOW;
 
-        if( is_write )
+        if( isWrite )
         {
             OutputWriteBit( ( data & bmask ) ? BIT_HIGH : BIT_LOW );
         }
         else
         {
-            if( is_last_bit )
-                next_bit = parity_bit;
+            BitState nextBit;
+            if( isLastByte )
+                nextBit = parityBit;
             else
-                next_bit = ( data & ( bmask << 1 ) ) ? BIT_HIGH : BIT_LOW;
+                nextBit = ( data & ( bmask << 1 ) ) ? BIT_HIGH : BIT_LOW;
 
-            OutputReadBit( ( data & bmask ) ? BIT_HIGH : BIT_LOW, next_bit );
+            OutputReadBit( ( data & bmask ) ? BIT_HIGH : BIT_LOW, nextBit );
         }
     }
 
     // data parity
-    OutputWriteBit( parity_bit );
+    OutputWriteBit( parityBit );
 
     // trailing zeros
-    for( num_bits = 0; num_bits < 10; ++num_bits )
+    for( numBits = 0; numBits < 10; ++numBits )
         OutputWriteBit( BIT_LOW );
 
     // pause
