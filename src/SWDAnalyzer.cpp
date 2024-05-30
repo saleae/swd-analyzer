@@ -85,7 +85,7 @@ const std::vector<SWDAnalyzer::SWDSequenceCondition> SWDAnalyzer::SEQUENCE_CONDI
 };
 
 
-SWDAnalyzer::SWDAnalyzer() : mSWDIO(), mSWCLK(), mSimulationInitilized( false )
+SWDAnalyzer::SWDAnalyzer() : Analyzer2(), mSWDIO(), mSWCLK(), mSimulationInitilized( false )
 {
     SetAnalyzerSettings( &mSettings );
 }
@@ -149,7 +149,7 @@ void SWDAnalyzer::WorkerThread()
                             mResults->CommitResults();
                             errorBits.Clear();
                         }
-                        const SWDBaseSequnce& sequence = std::invoke( cond.GetSequence, mSWDParser );
+                        SWDBaseSequnce& sequence = std::invoke( cond.GetSequence, mSWDParser );
                         sequence.AddFrames( mResults.get() );
                         sequence.AddMarkers( mResults.get() );
 
@@ -164,7 +164,7 @@ void SWDAnalyzer::WorkerThread()
         if( !conditionMeet )
         {
             // This is neither a valid transaction nor a valid reset,
-            // so collect these bits and go forwarrd.
+            // so collect these bits and go forward.
             mSWDParser.BufferBits( 1 ); // Make sure at least one bit is placed on the buffer
             errorBits.bits.push_back( mSWDParser.PopFrontBit() );
             mSWDParser.SetErrorBits();

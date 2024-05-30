@@ -24,7 +24,7 @@ class SWDAnalyzerResults : public AnalyzerResults
     SWDAnalyzerSettings* GetSettings() const;
 
   protected: // functions
-    void GetBubbleText( const Frame& f, DisplayBase displayBase, std::vector<std::string>& results );
+    void GetBubbleText( const Frame& f, DisplayBase displayBase, std::vector<std::string>& results, bool onlyFirstResult );
 
   protected: // vars
     SWDAnalyzerSettings* mSettings;

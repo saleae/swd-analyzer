@@ -15,7 +15,7 @@ SWDAnalyzerSettings::SWDAnalyzerSettings()
       mOverrunDetection( false ),
       mSelectRegister( 0x0u )
 {
-    // init the interface
+    // Init the interface
     mSWDIOInterface.SetTitleAndTooltip( "SWDIO", "SWDIO" );
     mSWDIOInterface.SetChannel( mSWDIO );
 

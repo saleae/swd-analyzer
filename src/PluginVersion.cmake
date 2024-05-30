@@ -38,4 +38,4 @@ math(EXPR PROJECT_VERSION_BUILD "${GIT_REV_COUNT}+${GIT_REPO_CHANGED}")
 message("Info: Version ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}.${PROJECT_VERSION_BUILD} ... ${GIT_COMMIT_HASH}")
 
 message("Info: Updating ${CMAKE_SOURCE_DIR}/../src/VersionInfo.cpp")
-file(WRITE ${CMAKE_SOURCE_DIR}/../src/VersionInfo.cpp "#include \"VersionInfo.h\"\n\nconst struct VersionInfo VersionInfo =\n{\n  ${PROJECT_VERSION_MAJOR}u,\n  ${PROJECT_VERSION_MINOR}u,\n  ${PROJECT_VERSION_PATCH}u,\n  ${PROJECT_VERSION_BUILD}u,\n  __DATE__,\n  __TIME__,\n  \"${GIT_COMMIT_HASH}\"\n};\n")
+file(WRITE ${CMAKE_SOURCE_DIR}/../src/VersionInfo.cpp "#include \"VersionInfo.h\"\n\nconst struct VersionInfo VERSION_INFO =\n{\n  ${PROJECT_VERSION_MAJOR}u,\n  ${PROJECT_VERSION_MINOR}u,\n  ${PROJECT_VERSION_PATCH}u,\n  ${PROJECT_VERSION_BUILD}u,\n  __DATE__,\n  __TIME__,\n  \"${GIT_COMMIT_HASH}\"\n};\n")

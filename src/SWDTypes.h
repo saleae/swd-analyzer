@@ -50,9 +50,11 @@ enum class SwdFrameTypes : U8
 class SWDFrame
 {
     static const std::map<SwdFrameTypes, std::string> FRAME_NAMES;
+    static const std::map<SwdFrameTypes, std::string> FRAMEV2_NAMES;
 
   public:
     static const std::string GetSwdFrameName( SwdFrameTypes frame );
+    static const std::string GetSwdFrameV2Name( SwdFrameTypes frame );
 };
 
 // Version of the DP architecture implemented
@@ -65,7 +67,7 @@ enum class DPVersion
 };
 
 // the DebugPort and AccessPort registers as defined by SWD
-enum class SWDRegisters
+enum class SWDRegisters : U16
 {
     SWDR_UNDEFINED,
 
@@ -398,8 +400,41 @@ enum class SWDAcks
 {
     ACK_OK = 1,
     ACK_WAIT = 2,
-    ACK_FAULT = 4,
+    ACK_FAULT = 4
 };
+
+// Address auto-increment and packing mode field of CSW register
+enum class CswAddrInc : U8
+{
+    CSW_ADDRINC_DISABLED = 0u,
+    CSW_ADDRINC_SINGLE = 1u,
+    CSW_ADDRINC_PACKED = 2u,
+    CSW_ADDRINC_RESERVED
+};
+
+// The size of the data type that is used to access the MEM-AP encoded in size firld of CSW register 
+enum class CswSize : U8
+{
+    CSW_SIZE_8_BIT = 0u,
+    CSW_SIZE_16_BIT = 1u,
+    CSW_SIZE_32_BIT = 2u,
+    CSW_SIZE_64_BIT = 3u,
+    CSW_SIZE_128_BIT = 4u,
+    CSW_SIZE_256_BIT = 5u,
+    CSW_SIZE_RESERVED
+};
+
+// Access and DP version bit field
+enum class RegMask : U8
+{
+    REG_READ = 0b00001u,
+    REG_WRITE = 0b00010u,
+    REG_V1 = 0b00100u,
+    REG_V2 = 0b01000u,
+    REG_V3 = 0b10000u
+};
+U8 operator|( const RegMask a, const RegMask b );
+U8 operator|( const U8 a, const RegMask b );
 
 // this is the basic token of the analyzer
 // objects of this type are buffered in SWDOperation
@@ -420,6 +455,8 @@ struct SWDBit
     S64 GetEndSample() const;
 
     Frame MakeFrame() const;
+    Frame MakeFrame( const S64 startingSampleInclusive, const S64 endingSampleInclusive, const U64 data1, const U64 data2, const U8 type,
+                     const U8 flags ) const;
 };
 
 class SWDRequestByte
@@ -440,11 +477,11 @@ union SWDRegistersUnion
     // Encoding rules of reg
     // prev               | current            | usecase
     // -------------------------------------------
-    // SWDR_UNDEFINED     | not SWDR_UNDEFINED | DP Read except READBUFF, DP Write, AP Write
-    // not SWDR_UNDEFINED | SWDR_UNDEFINED     | First AP Read
+    // SWDR_UNDEFINED     | not SWDR_UNDEFINED | DP Read except READBUFF, DP Write, AP Write, First AP Read
     // not SWDR_UNDEFINED | not SWDR_UNDEFINED | Next AP Reads, DP Read of READBUFF
     struct
     {
+        U32 memAddr;          // TAR value
         SWDRegisters prev;    // Previous SWD register
         SWDRegisters current; // Currenr SWD register
     } reg;
@@ -455,7 +492,7 @@ struct SWDBaseSequnce
     std::deque<SWDBit> bits;
 
     virtual void Clear();
-    virtual void AddFrames( SWDAnalyzerResults* pResults ) const;
+    virtual void AddFrames( SWDAnalyzerResults* pResults );
     virtual void AddMarkers( SWDAnalyzerResults* pResults ) const;
 };
 
@@ -482,6 +519,16 @@ struct SWDOperation : SWDBaseSequnce
     U8 turnaround = 1u;
     // Overrun detection
     bool orundetect = false;
+    // Number of Continuous AP Reads
+    size_t numApReads = 0;
+    // The register that was used in the previous AP read operation.
+    SWDRegisters lastRegister = SWDRegisters::SWDR_UNDEFINED;
+    // Address auto-increment and packing mode
+    CswAddrInc addrInc = CswAddrInc::CSW_ADDRINC_DISABLED;
+    // MEM-AP access size
+    CswSize dataSize = CswSize::CSW_SIZE_32_BIT;
+    // TAR 
+    U32 tar = 0;
 
     struct DPRegister
     {
@@ -495,21 +542,25 @@ struct SWDOperation : SWDBaseSequnce
     static const std::map<U16, SWDRegisters> MEM_AP_ADI_V6;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
     void AddMarkers( SWDAnalyzerResults* pResults ) const override;
     void SetRegister( U32 selectReg );
     void SetDPVer( DPVersion version );
     void SetTurnaroundNumber( U8 num );
     void SetOrunDetect( bool enable );
+    void SetAddrInc( U8 num );
+    void SetDataSize( U8 num );
 
     bool IsRead() const;
+    bool IsAp() const;
     size_t GetTurnaroundNumber() const;
     bool GetOrunDetect() const;
+    void IncrementTar();
 };
 
 struct SWDLineReset : SWDBaseSequnce
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct JTAGToSWD : SWDBaseSequnce
@@ -520,7 +571,7 @@ struct JTAGToSWD : SWDBaseSequnce
     U16 data = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct SWDToJTAG : SWDBaseSequnce
@@ -531,7 +582,7 @@ struct SWDToJTAG : SWDBaseSequnce
     U16 data = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct SWDErrorBits : SWDBaseSequnce
@@ -539,19 +590,19 @@ struct SWDErrorBits : SWDBaseSequnce
     DebugProtocol protocol = DebugProtocol::DPROTOCOL_UNKNOWN;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 
     void SetProtocol( const DebugProtocol newProtocol );
 };
 
 struct SWDIdleCycles : SWDBaseSequnce
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct JTAGTlr : SWDBaseSequnce
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct JTAGToDS : SWDBaseSequnce
@@ -560,7 +611,7 @@ struct JTAGToDS : SWDBaseSequnce
     U32 data = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct SWDToDS : SWDBaseSequnce
@@ -569,12 +620,12 @@ struct SWDToDS : SWDBaseSequnce
     U16 data = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct DSSelectionAlertPreamble : SWDBaseSequnce
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct DSSelectionAlert : SWDBaseSequnce
@@ -583,12 +634,12 @@ struct DSSelectionAlert : SWDBaseSequnce
     U64 lo64BitData = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct DSActivationCodePreamble : SWDBaseSequnce
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct DSActivationCode : SWDBaseSequnce
@@ -597,7 +648,7 @@ struct DSActivationCode : SWDBaseSequnce
     U16 data = 0u;
 
     void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) const override;
+    void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
 struct SWDRequestFrame : public Frame
@@ -605,10 +656,10 @@ struct SWDRequestFrame : public Frame
     // mData1 contains addr, mData2 contains the register enum
 
     // mFlag
-    enum
+    enum class RQ_FLAG : U8
     {
-        IS_READ = ( 1 << 0 ),
-        IS_ACCESS_PORT = ( 1 << 1 ),
+        IS_READ = ( 1u << 0u ),
+        IS_ACCESS_PORT = ( 1u << 1u ),
     };
 
     void SetRequestByte( U8 requestByte );
@@ -664,14 +715,31 @@ class SWDParser
 
     SWDBit ParseBit();
     void CopyBits( std::deque<SWDBit>& destination, const size_t numBits );
+    void CapureApRegData( SWDRegisters reg);
 
     // Comparison pattern primitives
     bool IsAtLeast( const size_t numBits, const BitState bit );
     size_t BitCount( const BitState bit, const size_t startingFromBit = 0 );
-    bool IsU8Sequence( const U8 *sequence, const size_t bitCnt = sizeof( U8 ) * 8u );
-    bool IsU16Sequence( const U16 *sequence, const size_t bitCnt = sizeof( U16 ) * 8u );
-    bool IsU32Sequence( const U32 *sequence, const size_t bitCnt = sizeof( U32 ) * 8u );
-    bool IsU64Sequence( const U64 *sequence, const size_t bitCnt = sizeof( U64 ) * 8u );
+    // Function template for compare mBitBuffer with array of uintX_t
+    template <typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true>
+    bool IsUintSequence( const T* sequence, const size_t bitCnt = sizeof( T ) * 8u )
+    {
+        bool sequenceMatched = true;
+        // make sure that the required bit count are placed in buffer
+        BufferBits( bitCnt );
+        // Check for the given sequence value, transmitted LSB first
+        for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
+        {
+            size_t index = sequenceCnt / ( sizeof( T ) * 8u );
+            size_t shift = sequenceCnt % ( sizeof( T ) * 8u );
+            if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
+            {
+                sequenceMatched = false;
+                break;
+            }
+        }
+        return sequenceMatched;
+    }
 
   public:
     SWDParser();
@@ -706,18 +774,18 @@ class SWDParser
     bool IsDsActivationCode();
 
     // Sequence getter
-    const SWDBaseSequnce& GetLineReset() const;
-    const SWDBaseSequnce& GetJtagToSwd() const;
-    const SWDBaseSequnce& GetSwdToJtag() const;
-    const SWDBaseSequnce& GetOperation() const;
-    const SWDBaseSequnce& GetIdleCycles() const;
-    const SWDBaseSequnce& GetJtagTlr() const;
-    const SWDBaseSequnce& GetJtagToDs() const;
-    const SWDBaseSequnce& GetSwdToDs() const;
-    const SWDBaseSequnce& GetDsSelectionAlertPreamble() const;
-    const SWDBaseSequnce& GetDsSelectionAlert() const;
-    const SWDBaseSequnce& GetDsActivationCodePreamble() const;
-    const SWDBaseSequnce& GetDsActivationCode() const;
+    SWDBaseSequnce& GetLineReset();
+    SWDBaseSequnce& GetJtagToSwd();
+    SWDBaseSequnce& GetSwdToJtag();
+    SWDBaseSequnce& GetOperation();
+    SWDBaseSequnce& GetIdleCycles();
+    SWDBaseSequnce& GetJtagTlr();
+    SWDBaseSequnce& GetJtagToDs();
+    SWDBaseSequnce& GetSwdToDs();
+    SWDBaseSequnce& GetDsSelectionAlertPreamble();
+    SWDBaseSequnce& GetDsSelectionAlert();
+    SWDBaseSequnce& GetDsActivationCodePreamble();
+    SWDBaseSequnce& GetDsActivationCode();
     SWDErrorBits& GetErrorBits();
 
     // Sequence status updaters

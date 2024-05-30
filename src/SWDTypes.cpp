@@ -12,57 +12,49 @@
 
 // DP registers
 
-enum class DPMask : U8      // Access and version bit field
-{
-    DP_REG_READ  = 0b00001u,
-    DP_REG_WRITE = 0b00010u,
-    DP_REG_V1    = 0b00100u,
-    DP_REG_V2    = 0b01000u,
-    DP_REG_V3    = 0b10000u
-};
-U8 operator|( const DPMask a, const DPMask b )
-{
-    return ( static_cast<U8>( a ) | static_cast<U8>( b ) );
-}
-U8 operator|( const U8 a, const DPMask b )
-{
-    return ( a | static_cast<U8>( b ) );
-}
-
 const std::map<U8, std::vector<SWDOperation::DPRegister>> SWDOperation::DP_REGISTERS = {
     { 0x00u,
         {
-            { {}, DPMask::DP_REG_READ | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 , SWDRegisters::SWDR_DP_DPIDR },
-            { { 0x00u }, DPMask::DP_REG_READ | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_DPIDR },
-            { { 0x01u }, DPMask::DP_REG_READ | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_DPIDR1 },
-            { { 0x02u }, DPMask::DP_REG_READ | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_BASEPTR0 },
-            { { 0x03u }, DPMask::DP_REG_READ | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_BASEPTR1 },
-            { {}, DPMask::DP_REG_WRITE | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_ABORT }
+            { {}, RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 , SWDRegisters::SWDR_DP_DPIDR },
+            { { 0x00u }, RegMask::REG_READ | RegMask::REG_V3, SWDRegisters::SWDR_DP_DPIDR },
+            { { 0x01u }, RegMask::REG_READ | RegMask::REG_V3, SWDRegisters::SWDR_DP_DPIDR1 },
+            { { 0x02u }, RegMask::REG_READ | RegMask::REG_V3, SWDRegisters::SWDR_DP_BASEPTR0 },
+            { { 0x03u }, RegMask::REG_READ | RegMask::REG_V3, SWDRegisters::SWDR_DP_BASEPTR1 },
+            { {}, RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_ABORT }
         }
     },
     { 0x04u,
         {
-            { { 0x00u }, DPMask::DP_REG_READ | DPMask::DP_REG_WRITE | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_CTRL_STAT },
-            { { 0x01u }, DPMask::DP_REG_READ | DPMask::DP_REG_WRITE | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_DLCR },
-            { { 0x02u }, DPMask::DP_REG_READ | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_TARGETID },
-            { { 0x03u }, DPMask::DP_REG_READ | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_DLPIDR },
-            { { 0x04u }, DPMask::DP_REG_READ | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_EVENTSTAT },
-            { { 0x05u }, DPMask::DP_REG_WRITE | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_SELECT1 },
+            { { 0x00u }, RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_CTRL_STAT },
+            { { 0x01u }, RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_DLCR },
+            { { 0x02u }, RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_TARGETID },
+            { { 0x03u }, RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_DLPIDR },
+            { { 0x04u }, RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_EVENTSTAT },
+            { { 0x05u }, RegMask::REG_WRITE | RegMask::REG_V3, SWDRegisters::SWDR_DP_SELECT1 },
         }
     },
     { 0x08u,
         {
-            { {}, DPMask::DP_REG_READ | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_RESEND },
-            { {}, DPMask::DP_REG_WRITE | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_SELECT }
+            { {}, RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_RESEND },
+            { {}, RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_SELECT }
         }
     },
     { 0x0Cu,
         {
-            { {}, DPMask::DP_REG_READ | DPMask::DP_REG_V1 | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_RDBUFF },
-            { {}, DPMask::DP_REG_WRITE | DPMask::DP_REG_V2 | DPMask::DP_REG_V3, SWDRegisters::SWDR_DP_TARGETSEL }
+            { {}, RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_RDBUFF },
+            { {}, RegMask::REG_WRITE | RegMask::REG_V2 | RegMask::REG_V3, SWDRegisters::SWDR_DP_TARGETSEL }
         }
     },
 };
+
+U8 operator|( const RegMask a, const RegMask b )
+{
+    return ( static_cast<U8>( a ) | static_cast<U8>( b ) );
+}
+U8 operator|( const U8 a, const RegMask b )
+{
+    return ( a | static_cast<U8>( b ) );
+}
 
 const std::map<U8, SWDRegisters> SWDOperation::MEM_AP_ADI_V5 = {
     { 0x00u, SWDRegisters::SWDR_AP_CSW },
@@ -412,6 +404,35 @@ const std::string SWDFrame::GetSwdFrameName( SwdFrameTypes frame )
     }
 }
 
+const std::map<SwdFrameTypes, std::string> SWDFrame::FRAMEV2_NAMES = {
+    { SwdFrameTypes::SWD_FT_ERROR, "ERROR" },
+    { SwdFrameTypes::SWD_FT_IGNORED, "IGNORED" },
+    { SwdFrameTypes::SWD_FT_LINE_RESET, "LINE_RESET" },
+    { SwdFrameTypes::SWD_FT_JTAG_TO_SWD, "JTAG_TO_SWD" },
+    { SwdFrameTypes::SWD_FT_SWD_TO_JTAG, "SWD_TO_JTAG" },
+    { SwdFrameTypes::SWD_FT_IDLE_CYCLE, "IDLE_CYCLE" },
+    { SwdFrameTypes::SWD_FT_JTAG_TLR, "JTAG_TLR" },
+    { SwdFrameTypes::SWD_FT_JTAG_TO_DS, "JTAG_TO_DS" },
+    { SwdFrameTypes::SWD_FT_SWD_TO_DS, "SWD_TO_DS" },
+    { SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE, "DS_SEL_ALERT_PREAMBLE" },
+    { SwdFrameTypes::SWD_FT_DS_SEL_ALERT, "DS_SEL_ALERT" },
+    { SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE, "DS_ACTIVATION_CODE_PREAMBLE" },
+    { SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE, "DS_ACTIVATION_CODE" }
+};
+
+const std::string SWDFrame::GetSwdFrameV2Name( SwdFrameTypes frame )
+{
+    auto search = FRAMEV2_NAMES.find( frame );
+    if( search != FRAMEV2_NAMES.end() )
+    {
+        return search->second;
+    }
+    else
+    {
+        return "UNKNOWN";
+    }
+}
+
 // ********************************************************************************
 
 bool SWDBit::IsHigh( bool isRising ) const
@@ -447,6 +468,20 @@ Frame SWDBit::MakeFrame() const
 
     f.mData1 = stateRising == BIT_HIGH ? 1 : 0;
     f.mData2 = 0;
+
+    return f;
+}
+
+Frame SWDBit::MakeFrame( const S64 startingSampleInclusive, const S64 endingSampleInclusive, const U64 data1, const U64 data2, const U8 type, const U8 flags ) const
+{
+    Frame f;
+
+    f.mStartingSampleInclusive = startingSampleInclusive;
+    f.mEndingSampleInclusive = endingSampleInclusive;
+    f.mData1 = data1;
+    f.mData2 = data2;
+    f.mType = type;
+    f.mFlags = flags;
 
     return f;
 }
@@ -489,7 +524,7 @@ void SWDBaseSequnce::Clear()
     bits.clear();
 }
 
-void SWDBaseSequnce::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDBaseSequnce::AddFrames( SWDAnalyzerResults* pResults )
 {
 }
 
@@ -508,39 +543,36 @@ void SWDOperation::Clear()
     bits.clear();
 }
 
-void SWDOperation::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
 {
-    static size_t numApReads = 0;
-    static SWDRegisters lastRegister = SWDRegisters::SWDR_UNDEFINED;
+    Frame frame;
 
-    Frame f;
-
-    assert( bits.size() >= 8u + GetTurnaroundNumber() + 3u );
+    const size_t trnNr = GetTurnaroundNumber();
+    assert( bits.size() >= 8u + trnNr + 3u );
 
     // request
-    SWDRequestFrame req;
-    req.mStartingSampleInclusive = bits[ 0u ].GetStartSample();
-    req.mEndingSampleInclusive = bits[ 7u ].GetEndSample();
-    req.mFlags = ( IsRead() ? SWDRequestFrame::IS_READ : 0u ) | ( reqAPnDP ? SWDRequestFrame::IS_ACCESS_PORT : 0u );
-    req.SetRequestByte( requestByte );
-    req.SetRegister( reg );
-    req.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_REQUEST );
-    pResults->AddFrame( req );
+    std::deque<SWDBit>::const_iterator bi( bits.begin() );
+    const S64 opStartSample = bi[ 0u ].GetStartSample();
+    S64 endSample = bi[ 7u ].GetEndSample();
+    frame = bi->MakeFrame( opStartSample, endSample, requestByte, static_cast<U64>( reg ), static_cast<U8>( SwdFrameTypes::SWD_FT_REQUEST ),
+                           ( IsRead() ? static_cast<U8>( SWDRequestFrame::RQ_FLAG::IS_READ ) : 0u ) |
+                               ( reqAPnDP ? static_cast<U8>( SWDRequestFrame::RQ_FLAG::IS_ACCESS_PORT ) : 0u ) );
+    pResults->AddFrame( frame );
+    bi += 8u;
 
-    std::deque<SWDBit>::const_iterator bi( bits.begin() + 8u );
     // turnaround
-    f = bi->MakeFrame();
-    f.mEndingSampleInclusive = bi[ GetTurnaroundNumber() - 1u ].GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND );
-    pResults->AddFrame( f );
-    bi += GetTurnaroundNumber();
+    S64 startSample = bi[ 0u ].GetStartSample();
+    endSample = bi[ trnNr - 1u ].GetEndSample();
+    frame =
+        bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
+    pResults->AddFrame( frame );
+    bi += trnNr;
 
     // ack
-    f = bi->MakeFrame();
-    f.mEndingSampleInclusive = bi[ 2u ].GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_ACK );
-    f.mData1 = reqAck;
-    pResults->AddFrame( f );
+    startSample = bi[ 0u ].GetStartSample();
+    endSample = bi[ 2u ].GetEndSample();
+    frame = bi->MakeFrame( startSample, endSample, reqAck, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_ACK ), 0u );
+    pResults->AddFrame( frame );
     bi += 3u;
 
     // turnaround if ACK is WAIT or FAULT or OK with write operation
@@ -548,47 +580,46 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults ) const
         ( reqAck == static_cast<U8>( SWDAcks::ACK_FAULT ) ) ||
         ( ( reqAck == static_cast<U8>( SWDAcks::ACK_OK ) ) && !IsRead() ) )
     {
-        f = bi->MakeFrame();
-        f.mEndingSampleInclusive = bi[ GetTurnaroundNumber() - 1u ].GetEndSample();
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND );
-        pResults->AddFrame( f );
-        bi += GetTurnaroundNumber();
+        startSample = bi[ 0u ].GetStartSample();
+        endSample = bi[ trnNr - 1u ].GetEndSample();
+        frame = bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
+        pResults->AddFrame( frame );
+        bi += trnNr;
     }
-    if( bits.size() < 8u + GetTurnaroundNumber() + 3u + 32u + 1u + GetTurnaroundNumber() )
+    if( bits.size() < 8u + trnNr + 3u + 32u + 1u + trnNr )
+    {
+        FrameV2 frameV2;
+        frameV2.AddBoolean( "RnW", IsRead() );
+        frameV2.AddBoolean( "APnDP", reqAPnDP );
+        frameV2.AddString( "reg", GetRegisterName( reg ).c_str() );
+        frameV2.AddByte( "ack", reqAck );
+        pResults->AddFrameV2( frameV2, "transfer", opStartSample, endSample );
         return;
+    }
 
     // data
-    f = bi->MakeFrame();
-    f.mEndingSampleInclusive = bi[ 31u ].GetEndSample();
+    startSample = bi[ 0u ].GetStartSample();
+    endSample = bi[ 31u ].GetEndSample();
+    SWDRegistersUnion swdRegCouple{}; // Couple of previous and current SWD register
     if( IsRead() )
     {
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_RDATA );
-    }
-    else
-    {
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_WDATA );
-    }
-
-    SWDRegistersUnion swdRegCouple; // Couple of previous and current SWD register
-    if( IsRead() )
-    {
-        if( reqAPnDP )
+        if( IsAp() )
         {
             // AP read
             if( numApReads == 0 )
             {
                 // On the first AP read access, the read data that is returned is unknown. The debugger must discard this result.
-                swdRegCouple.reg.prev = reg;
-                swdRegCouple.reg.current = SWDRegisters::SWDR_UNDEFINED;
+                swdRegCouple.reg.prev = SWDRegisters::SWDR_UNDEFINED;
+                swdRegCouple.reg.current = reg; 
             }
             else
             {
                 // The next AP read access, if successful, returns the result of the previous AP read.
                 swdRegCouple.reg.prev = lastRegister;
                 swdRegCouple.reg.current = reg;
+                swdRegCouple.reg.memAddr = tar;
             }
             numApReads++;
-            lastRegister = reg;
         }
         else
         {
@@ -598,8 +629,8 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults ) const
                 // The debugger can then read the DP RDBUFF register to obtain the last AP read result.
                 swdRegCouple.reg.prev = lastRegister;
                 swdRegCouple.reg.current = reg;
+                swdRegCouple.reg.memAddr = tar;
                 numApReads = 0;
-                lastRegister = SWDRegisters::SWDR_UNDEFINED;
             }
             else
             {
@@ -612,41 +643,89 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults ) const
     {
         swdRegCouple.reg.prev = SWDRegisters::SWDR_UNDEFINED;
         swdRegCouple.reg.current = reg;
+        swdRegCouple.reg.memAddr = tar;
         numApReads = 0;
-        lastRegister = SWDRegisters::SWDR_UNDEFINED;
     }
-
-    f.mData1 = data;
-    f.mData2 = swdRegCouple.blob;
-    pResults->AddFrame( f );
+    frame = bi->MakeFrame( startSample, endSample, data, swdRegCouple.blob, IsRead() ? static_cast<U8>( SwdFrameTypes::SWD_FT_RDATA ) : static_cast<U8>( SwdFrameTypes::SWD_FT_WDATA ), 0u );
+    pResults->AddFrame( frame );
+    bi += 32u;
 
     // data parity
-    f = bi[ 32u ].MakeFrame();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DATA_PARITY );
-    f.mData1 = dataParity;
-    f.mData2 = dataParityOk ? 1 : 0;
-    pResults->AddFrame( f );
+    startSample = bi[ 0u ].GetStartSample();
+    endSample = bi[ 0u ].GetEndSample();
+    frame = bi->MakeFrame( startSample, endSample, dataParity, dataParityOk ? 1u : 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_DATA_PARITY ), 0u );
+    pResults->AddFrame( frame );
+    bi += 1u;
 
     if( IsRead() )
     {
         // add turnaround on read operation
-        f = bi[ 33u ].MakeFrame();
-        f.mEndingSampleInclusive = bi[ 33u + GetTurnaroundNumber() - 1u ].GetEndSample();
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND );
-        pResults->AddFrame( f );
+        startSample = bi[ 0u ].GetStartSample();
+        endSample = bi[ trnNr - 1u ].GetEndSample();
+        frame = bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
+        pResults->AddFrame( frame );
     }
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddBoolean( "RnW", IsRead() );
+    frameV2.AddBoolean( "APnDP", IsAp() );
+    frameV2.AddString( "reg", GetRegisterName( reg ).c_str() );
+    frameV2.AddByte( "ack", reqAck );
+    std::vector<U8> bytes = ToVectorU8( data );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    // Add an effective AP register that refers to data
+    SWDRegisters effectiveApReg = SWDRegisters::SWDR_UNDEFINED; 
+    if( IsRead() )
+    {
+        // Read operation
+        if( IsAp() )
+        {
+            if( swdRegCouple.reg.current != SWDRegisters::SWDR_UNDEFINED )
+            {
+                effectiveApReg = swdRegCouple.reg.prev;
+            }
+        }
+        else
+        {
+            if( reg == SWDRegisters::SWDR_DP_RDBUFF )
+            {
+                effectiveApReg = swdRegCouple.reg.prev;
+            }
+        }
+    }
+    else
+    {
+        // Write operation
+        if( IsAp() )
+        {
+            effectiveApReg = swdRegCouple.reg.current;
+        }
+    }
+    if( effectiveApReg != SWDRegisters::SWDR_UNDEFINED )
+    {
+        frameV2.AddString( "apreg", ::GetRegisterName( effectiveApReg ).c_str() );
+        // Data Read/Write register
+        if( IsApDataReg( effectiveApReg ) )
+        {
+            std::vector<U8> memAddrBytes = ToVectorU8( GetMemAddr( effectiveApReg, swdRegCouple.reg.memAddr ) );
+            frameV2.AddByteArray( "memaddr", memAddrBytes.data(), memAddrBytes.size() );
+        }
+    }
+    pResults->AddFrameV2( frameV2, "transfer", opStartSample, endSample );
 }
 
 void SWDOperation::AddMarkers( SWDAnalyzerResults* pResults ) const
 {
+    const size_t trnNr = GetTurnaroundNumber();
     for( std::deque<SWDBit>::const_iterator bi( bits.begin() ); bi != bits.end(); ++bi )
     {
         size_t ndx = bi - bits.begin();
 
         // turnaround
-        if( ( (ndx >= 8u) && (ndx < 8u + GetTurnaroundNumber()) ) ||
-            ( !IsRead() && ( ( ndx >= 8u + GetTurnaroundNumber() + 3u ) && ( ndx < 8u + GetTurnaroundNumber() + 3u + GetTurnaroundNumber() ) ) ) ||
-            ( IsRead() && ( ( ndx >= 8u + GetTurnaroundNumber() + 3u + 32u + 1u ) && ( ndx < 8u + GetTurnaroundNumber() + 3u + 32u + 1u + GetTurnaroundNumber() ) ) )
+        if( ( ( ndx >= 8u ) && ( ndx < 8u + trnNr ) ) ||
+            ( !IsRead() && ( ( ndx >= 8u + trnNr + 3u ) && ( ndx < 8u + trnNr + 3u + trnNr ) ) ) ||
+            ( IsRead() && ( ( ndx >= 8u + trnNr + 3u + 32u + 1u ) && ( ndx < 8u + trnNr + 3u + 32u + 1u + trnNr ) ) )
         )
         {
             pResults->AddMarker( ( bi->falling + bi->rising ) / 2, AnalyzerResults::X, pResults->GetSettings()->mSWCLK );
@@ -674,7 +753,7 @@ void SWDOperation::SetRegister( U32 selectReg )
         if( dpVer < DPVersion::DP_V3 )
         {
             // MEM-AP ADIv5
-            U8 apBankSel = U8( selectReg & 0xF0u );
+            U8 apBankSel = static_cast<U8>( selectReg & 0xF0u );
             U8 apRegOffset = apBankSel | addr;
             const auto apReg = MEM_AP_ADI_V5.find( apRegOffset );
             if( apReg != MEM_AP_ADI_V5.end() )
@@ -685,7 +764,7 @@ void SWDOperation::SetRegister( U32 selectReg )
         else
         {
             // MEM-AP ADIv6
-            U16 apRegOffset = U16( selectReg & 0xFF0u );
+            U16 apRegOffset = static_cast<U16>( selectReg & 0xFF0u );
             apRegOffset |= addr;
             const auto apReg = MEM_AP_ADI_V6.find( apRegOffset );
             if( apReg != MEM_AP_ADI_V6.end() )
@@ -697,7 +776,7 @@ void SWDOperation::SetRegister( U32 selectReg )
     else
     {
         reg = SWDRegisters::SWDR_UNDEFINED;
-        U8 dpBankSel = selectReg & 0x0Fu;
+        U8 dpBankSel = static_cast<U8>(selectReg & 0x0Fu);
 
         const auto dpReg = DP_REGISTERS.find( addr );
         if( dpReg != DP_REGISTERS.end() )
@@ -706,13 +785,13 @@ void SWDOperation::SetRegister( U32 selectReg )
             {
                 if( dpRegRecord.Bank.empty() || ( dpRegRecord.Bank.find( dpBankSel ) != dpRegRecord.Bank.end() ) )
                 {
-                    if( ( reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( DPMask::DP_REG_READ ) ) != 0u ) ) ||
-                        ( !reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( DPMask::DP_REG_WRITE ) ) != 0u ) ) )
+                    if( ( reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_READ ) ) != 0u ) ) ||
+                        ( !reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_WRITE ) ) != 0u ) ) )
                     {
                         if( ( dpVer == DPVersion::DP_V0 ) ||
-                            ( ( dpVer == DPVersion::DP_V1 ) && ( ( dpRegRecord.Access & static_cast<U8>( DPMask::DP_REG_V1 ) ) != 0u ) ) ||
-                            ( ( dpVer == DPVersion::DP_V2 ) && ( ( dpRegRecord.Access & static_cast<U8>( DPMask::DP_REG_V2 ) ) != 0u ) ) ||
-                            ( ( dpVer == DPVersion::DP_V3 ) && ( ( dpRegRecord.Access & static_cast<U8>( DPMask::DP_REG_V3 ) ) != 0u ) ) )
+                            ( ( dpVer == DPVersion::DP_V1 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V1 ) ) != 0u ) ) ||
+                            ( ( dpVer == DPVersion::DP_V2 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V2 ) ) != 0u ) ) ||
+                            ( ( dpVer == DPVersion::DP_V3 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V3 ) ) != 0u ) ) )
                         {
                             reg = dpRegRecord.Register;
                             break;
@@ -727,6 +806,11 @@ void SWDOperation::SetRegister( U32 selectReg )
 bool SWDOperation::IsRead() const
 {
     return reqRnW;
+}
+
+bool SWDOperation::IsAp() const
+{
+    return reqAPnDP;
 }
 
 void SWDOperation::SetTurnaroundNumber( U8 num )
@@ -744,24 +828,92 @@ void SWDOperation::SetOrunDetect( bool enable )
     orundetect = enable;
 }
 
+void SWDOperation::SetAddrInc( U8 num )
+{
+    switch( num )
+    {
+        case static_cast<U8>(CswAddrInc::CSW_ADDRINC_DISABLED):
+            addrInc = CswAddrInc::CSW_ADDRINC_DISABLED;
+            break;
+        case static_cast<U8>( CswAddrInc::CSW_ADDRINC_SINGLE ):
+            addrInc = CswAddrInc::CSW_ADDRINC_SINGLE;
+            break;
+        case static_cast<U8>( CswAddrInc::CSW_ADDRINC_PACKED ):
+            addrInc = CswAddrInc::CSW_ADDRINC_PACKED;
+            break;
+        default:
+            addrInc = CswAddrInc::CSW_ADDRINC_RESERVED;
+            break;
+    }
+}
+
+void SWDOperation::SetDataSize( U8 num )
+{
+    switch( num )
+    {
+        case static_cast<U8>( CswSize::CSW_SIZE_8_BIT ):
+            dataSize = CswSize::CSW_SIZE_8_BIT;
+            break;
+        case static_cast<U8>( CswSize::CSW_SIZE_16_BIT ):
+            dataSize = CswSize::CSW_SIZE_16_BIT;
+            break;
+        case static_cast<U8>( CswSize::CSW_SIZE_32_BIT ):
+            dataSize = CswSize::CSW_SIZE_32_BIT;
+            break;
+        case static_cast<U8>( CswSize::CSW_SIZE_64_BIT ):
+            dataSize = CswSize::CSW_SIZE_64_BIT;
+            break;
+        case static_cast<U8>( CswSize::CSW_SIZE_128_BIT ):
+            dataSize = CswSize::CSW_SIZE_128_BIT;
+            break;
+        case static_cast<U8>( CswSize::CSW_SIZE_256_BIT ):
+            dataSize = CswSize::CSW_SIZE_256_BIT;
+            break;
+        default:
+            dataSize = CswSize::CSW_SIZE_RESERVED;
+            break;
+    }
+}
+
 bool SWDOperation::GetOrunDetect() const
 {
     return orundetect;
 }
 
+void SWDOperation::IncrementTar()
+{
+    if( addrInc == CswAddrInc::CSW_ADDRINC_SINGLE )
+    {
+        tar += ( 1u << static_cast<U8>( dataSize ));
+    }
+    else if( addrInc == CswAddrInc::CSW_ADDRINC_PACKED )
+    {
+        tar += 4u;
+    }
+}
+
 
 // ********************************************************************************
 
-void SWDLineReset::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDLineReset::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
 
-    // line reset
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_LINE_RESET );
-    f.mData1 = bits.size();
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_LINE_RESET );
+    frame.mData1 = bitCount;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_LINE_RESET ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -773,15 +925,27 @@ void JTAGToSWD::Clear()
     bits.clear();
 }
 
-void JTAGToSWD::AddFrames( SWDAnalyzerResults* pResults ) const
+void JTAGToSWD::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_SWD );
-    f.mData1 = data;
-    f.mFlags = deprecated ? 1 : 0;
-    pResults->AddFrame( f );
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_SWD );
+    frame.mData1 = data;
+    frame.mFlags = deprecated ? 1u : 0u;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TO_SWD ).c_str() );
+    frameV2.AddInteger( "cycles", sizeof(data) * 8u );
+    std::vector<U8> bytes = ToVectorU8( data );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -793,15 +957,27 @@ void SWDToJTAG::Clear()
     bits.clear();
 }
 
-void SWDToJTAG::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDToJTAG::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_JTAG );
-    f.mData1 = data;
-    f.mFlags = deprecated ? 1 : 0;
-    pResults->AddFrame( f );
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_JTAG );
+    frame.mData1 = data;
+    frame.mFlags = deprecated ? 1 : 0;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_SWD_TO_JTAG ).c_str() );
+    frameV2.AddInteger( "cycles", sizeof( data ) * 8u );
+    std::vector<U8> bytes = ToVectorU8( data );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -812,24 +988,29 @@ void SWDErrorBits::Clear()
     bits.clear();
 }
 
-void SWDErrorBits::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDErrorBits::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
+    SwdFrameTypes frameType = ( ( protocol == DebugProtocol::DPROTOCOL_UNKNOWN ) || ( protocol == DebugProtocol::DPROTOCOL_SWD ) )
+                                  ? SwdFrameTypes::SWD_FT_ERROR
+                                  : SwdFrameTypes::SWD_FT_IGNORED;
 
-    // Erroneus bits
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    if( ( protocol == DebugProtocol::DPROTOCOL_UNKNOWN ) || ( protocol == DebugProtocol::DPROTOCOL_SWD ) )
-    {
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_ERROR );
-    }
-    else
-    {
-        f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_IGNORED );
-    }
-    f.mData1 = bits.size();
-    f.mData2 = static_cast<U64>( protocol );
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( frameType );
+    frame.mData1 = bitCount;
+    frame.mData2 = static_cast<U64>( protocol );
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( frameType ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 void SWDErrorBits::SetProtocol( const DebugProtocol newProtocol )
@@ -839,30 +1020,48 @@ void SWDErrorBits::SetProtocol( const DebugProtocol newProtocol )
 
 // ********************************************************************************
 
-void SWDIdleCycles::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDIdleCycles::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
 
-    // Idle cycle bits
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_IDLE_CYCLE );
-    f.mData1 = bits.size();
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_IDLE_CYCLE );
+    frame.mData1 = bitCount;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_IDLE_CYCLE ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
 
-void JTAGTlr::AddFrames( SWDAnalyzerResults* pResults ) const
+void JTAGTlr::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
 
-    // JTAG test logic reset
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TLR );
-    f.mData1 = bits.size();
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TLR );
+    frame.mData1 = bitCount;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TLR ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -873,14 +1072,26 @@ void JTAGToDS::Clear()
     bits.clear();
 }
 
-void JTAGToDS::AddFrames( SWDAnalyzerResults* pResults ) const
+void JTAGToDS::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_DS );
-    f.mData1 = data;
-    pResults->AddFrame( f );
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_DS );
+    frame.mData1 = data;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TO_DS ).c_str() );
+    frameV2.AddInteger( "cycles", 31u );
+    std::vector<U8> bytes = ToVectorU8( data );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -891,28 +1102,49 @@ void SWDToDS::Clear()
     bits.clear();
 }
 
-void SWDToDS::AddFrames( SWDAnalyzerResults* pResults ) const
+void SWDToDS::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_DS );
-    f.mData1 = data;
-    pResults->AddFrame( f );
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_DS );
+    frame.mData1 = data;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_SWD_TO_DS ).c_str() );
+    frameV2.AddInteger( "cycles", 16u );
+    std::vector<U8> bytes = ToVectorU8( data );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
 
-void DSSelectionAlertPreamble::AddFrames( SWDAnalyzerResults* pResults ) const
+void DSSelectionAlertPreamble::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
 
-    // DS Selection Alert sequence preamble
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE );
-    f.mData1 = bits.size();
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE );
+    frame.mData1 = bitCount;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -924,31 +1156,52 @@ void DSSelectionAlert::Clear()
     bits.clear();
 }
 
-void DSSelectionAlert::AddFrames( SWDAnalyzerResults* pResults ) const
+void DSSelectionAlert::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
 
-    // DS Selection Alert sequence
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT );
-    f.mData1 = lo64BitData;
-    f.mData2 = hi64BitData;
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT );
+    frame.mData1 = hi64BitData;
+    frame.mData2 = lo64BitData;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_SEL_ALERT ).c_str() );
+    frameV2.AddInteger( "cycles", 128u );
+    std::vector<U8> bytes = ToVectorU8( lo64BitData );
+    std::vector<U8> bytesHi = ToVectorU8( hi64BitData );
+    bytes.insert( bytes.end(), bytesHi.begin(), bytesHi.end() );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
 
-void DSActivationCodePreamble::AddFrames( SWDAnalyzerResults* pResults ) const
+void DSActivationCodePreamble::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
+    size_t bitCount = bits.size();
 
-    // DS Activation Code sequence preamble
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE );
-    f.mData1 = bits.size();
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE );
+    frame.mData1 = bitCount;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -959,16 +1212,34 @@ void DSActivationCode::Clear()
     bits.clear();
 }
 
-void DSActivationCode::AddFrames( SWDAnalyzerResults* pResults ) const
+void DSActivationCode::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame f;
+    S64 startSample = bits.front().GetStartSample();
+    S64 endSample = bits.back().GetEndSample();
 
-    // DS Activation code
-    f.mStartingSampleInclusive = bits.front().GetStartSample();
-    f.mEndingSampleInclusive = bits.back().GetEndSample();
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE );
-    f.mData1 = data;
-    pResults->AddFrame( f );
+    // Legacy Frame
+    Frame frame;
+    frame.mStartingSampleInclusive = startSample;
+    frame.mEndingSampleInclusive = endSample;
+    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE );
+    frame.mData1 = data;
+    pResults->AddFrame( frame );
+
+    // New FrameV2 code.
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE ).c_str() );
+    frameV2.AddInteger( "cycles", bits.size() );
+    std::vector<U8> bytes;
+    if( bits.size() == 8u )
+    {
+        bytes.push_back( static_cast<U8>( data ) );
+    }
+    else
+    {
+        bytes = ToVectorU8( data );
+    }
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
@@ -985,12 +1256,12 @@ U8 SWDRequestFrame::GetAddr() const
 
 bool SWDRequestFrame::IsRead() const
 {
-    return ( mFlags & IS_READ ) != 0;
+    return ( mFlags & static_cast<U8>( RQ_FLAG::IS_READ ) ) != 0;
 }
 
 bool SWDRequestFrame::IsAccessPort() const
 {
-    return ( mFlags & IS_ACCESS_PORT ) != 0;
+    return ( mFlags & static_cast<U8>( RQ_FLAG::IS_ACCESS_PORT ) ) != 0;
 }
 
 bool SWDRequestFrame::IsDebugPort() const
@@ -1015,9 +1286,9 @@ std::string SWDRequestFrame::GetRegisterName() const
 
 // ********************************************************************************
 
-const U16 SWDParser::SEQUENCE_JTAG_SERIAL = 0x0000u;         // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
-const U8 SWDParser::SEQUENCE_SW_DP = 0x1Au;            // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
-const U8 SWDParser::SEQUENCE_JTAG_DP = 0x0Au;                  // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
+const U16 SWDParser::SEQUENCE_JTAG_SERIAL = 0x0000u; // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
+const U8 SWDParser::SEQUENCE_SW_DP = 0x1Au;          // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
+const U8 SWDParser::SEQUENCE_JTAG_DP = 0x0Au;        // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
 
 SWDBit SWDParser::ParseBit()
 {
@@ -1134,90 +1405,6 @@ size_t SWDParser::BitCount( const BitState bit, const size_t startingFromBit )
     }
 
     return bitCnt;
-}
-
-bool SWDParser::IsU8Sequence( const U8* sequence, const size_t bitCnt )
-{
-    bool sequenceMatched = true;
-
-    // make sure that the required bit count are placed in buffer
-    BufferBits( bitCnt );
-    // Check for the given sequence value, transmitted LSB first
-    for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
-    {
-        size_t index = sequenceCnt / ( sizeof( U8 ) * 8u );
-        size_t shift = sequenceCnt % ( sizeof( U8 ) * 8u );
-        if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
-        {
-            sequenceMatched = false;
-            break;
-        }
-    }
-
-    return sequenceMatched;
-}
-
-bool SWDParser::IsU16Sequence( const U16* sequence, const size_t bitCnt )
-{
-    bool sequenceMatched = true;
-
-    // make sure that the required bit count are placed in buffer
-    BufferBits( bitCnt );
-    // Check for the given sequence value, transmitted LSB first
-    for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
-    {
-        size_t index = sequenceCnt / ( sizeof( U16 ) * 8u );
-        size_t shift = sequenceCnt % ( sizeof( U16 ) * 8u );
-        if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
-        {
-            sequenceMatched = false;
-            break;
-        }
-    }
-
-    return sequenceMatched;
-}
-
-bool SWDParser::IsU32Sequence( const U32* sequence, const size_t bitCnt )
-{
-    bool sequenceMatched = true;
-
-    // make sure that the required bit count are placed in buffer
-    BufferBits( bitCnt );
-    // Check for the given sequence value, transmitted LSB first
-    for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
-    {
-        size_t index = sequenceCnt / ( sizeof( U32 ) * 8u );
-        size_t shift = sequenceCnt % ( sizeof( U32 ) * 8u );
-        if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
-        {
-            sequenceMatched = false;
-            break;
-        }
-    }
-
-    return sequenceMatched;
-}
-
-bool SWDParser::IsU64Sequence( const U64* sequence, const size_t bitCnt )
-{
-    bool sequenceMatched = true;
-
-    // make sure that the required bit count are placed in buffer
-    BufferBits( bitCnt );
-    // Check for the given sequence value, transmitted LSB first
-    for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
-    {
-        size_t index = sequenceCnt / ( sizeof( U64 ) * 8u );
-        size_t shift = sequenceCnt % ( sizeof( U64 ) * 8u );
-        if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
-        {
-            sequenceMatched = false;
-            break;
-        }
-    }
-
-    return sequenceMatched;
 }
 
 SWDParser::SWDParser()
@@ -1361,7 +1548,7 @@ bool SWDParser::IsOperation()
                 ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 1u ].stateRising == BIT_HIGH ? ( 1u << 1u ) : 0u ) +
                 ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 2u ].stateRising == BIT_HIGH ? ( 1u << 2u ) : 0u );
 
-    // handling non-OK response if Overrun detection is not enabled
+    // handling non-OK response if Overrun detection is not enabled or it is a write operation to the TARGETSEL register
     if( !mTran.orundetect && !isTargetSel && ( mTran.reqAck != static_cast<U8>( SWDAcks::ACK_OK ) ) )
     {
         size_t badTranLength = 8u + mTran.GetTurnaroundNumber() + 3u;
@@ -1479,7 +1666,7 @@ bool SWDParser::IsJtagToSwd()
     const U16 sequenceDeprecated = 0xEDB6; // 0xEDB6, transmitted LSB first
 
     // Check for 0xE79E value, transmitted LSB first
-    bool sequenceMatched = IsU16Sequence( &sequence );
+    bool sequenceMatched = IsUintSequence( &sequence );
 
     if( sequenceMatched )
     {
@@ -1488,7 +1675,7 @@ bool SWDParser::IsJtagToSwd()
     else
     {
         // Check for deprecated 0xEDB6 value, transmitted LSB first
-        sequenceMatched = IsU16Sequence( &sequenceDeprecated );
+        sequenceMatched = IsUintSequence( &sequenceDeprecated );
 
         if( sequenceMatched )
         {
@@ -1514,7 +1701,7 @@ bool SWDParser::IsSwdToJtag()
     const U16 sequenceDeprecated = 0xAEAE; // 0xAEAE, transmitted LSB first
 
     // Check for 0xE73C value, transmitted LSB first
-    bool sequenceMatched = IsU16Sequence( &sequence );
+    bool sequenceMatched = IsUintSequence( &sequence );
 
     if( sequenceMatched )
     {
@@ -1523,7 +1710,7 @@ bool SWDParser::IsSwdToJtag()
     else
     {
         // Check for deprecated 0xAEAE value, transmitted LSB first
-        sequenceMatched = IsU16Sequence( &sequenceDeprecated );
+        sequenceMatched = IsUintSequence( &sequenceDeprecated );
 
         if( sequenceMatched )
         {
@@ -1584,7 +1771,7 @@ bool SWDParser::IsJtagToDs()
     mJtagToDs.Clear();
     const U32 sequence = 0x33BBBBBA; // 0x33BBBBBA, 31 bits transmitted LSB first
 
-    bool sequenceMatched = IsU32Sequence( &sequence, 31u );
+    bool sequenceMatched = IsUintSequence( &sequence, 31u );
 
     if( sequenceMatched )
     {
@@ -1606,7 +1793,7 @@ bool SWDParser::IsSwdToDs()
     const U16 sequence = 0xE3BC; // 0xE3BC, transmitted LSB first
 
     // Check for 0xE73C value, transmitted LSB first
-    bool sequenceMatched = IsU16Sequence( &sequence );
+    bool sequenceMatched = IsUintSequence( &sequence );
 
     if( sequenceMatched )
     {
@@ -1651,7 +1838,7 @@ bool SWDParser::IsDsSelectionAlert()
         0x19BC0EA2E3DDAFE9u  // Hihg 64 bits transmitted LSB first
     };
 
-    bool sequenceMatched = IsU64Sequence( sequence, 128u );
+    bool sequenceMatched = IsUintSequence( sequence, 128u );
 
     if( sequenceMatched )
     {
@@ -1674,7 +1861,7 @@ bool SWDParser::IsDsActivationCodePreamble()
     const U8 sequence = 0x00; // 0x00, 4 cycles with SWDIOTMS LOW
 
     // Check for 0x00 value, transmitted LSB first
-    bool sequenceMatched = IsU8Sequence( &sequence, 4u );
+    bool sequenceMatched = IsUintSequence( &sequence, 4u );
 
     if( !sequenceMatched )
     {
@@ -1692,7 +1879,7 @@ bool SWDParser::IsDsActivationCode()
     mDsActivationCode.Clear();
     size_t sequenceLength = 0;
 
-    bool sequenceMatched = IsU16Sequence( &SEQUENCE_JTAG_SERIAL, 12u );
+    bool sequenceMatched = IsUintSequence( &SEQUENCE_JTAG_SERIAL, 12u );
 
     if( sequenceMatched )
     {
@@ -1701,7 +1888,7 @@ bool SWDParser::IsDsActivationCode()
     }
     else
     {
-        sequenceMatched = IsU8Sequence( &SEQUENCE_SW_DP );
+        sequenceMatched = IsUintSequence( &SEQUENCE_SW_DP );
         if( sequenceMatched )
         {
             mDsActivationCode.data = SEQUENCE_SW_DP;
@@ -1709,7 +1896,7 @@ bool SWDParser::IsDsActivationCode()
         }
         else
         {
-            sequenceMatched = IsU8Sequence( &SEQUENCE_JTAG_DP );
+            sequenceMatched = IsUintSequence( &SEQUENCE_JTAG_DP );
             if( sequenceMatched )
             {
                 mDsActivationCode.data = SEQUENCE_JTAG_DP;
@@ -1728,51 +1915,51 @@ bool SWDParser::IsDsActivationCode()
 }
 
 
-const SWDBaseSequnce& SWDParser::GetLineReset() const
+SWDBaseSequnce& SWDParser::GetLineReset()
 {
     return mReset;
 }
-const SWDBaseSequnce& SWDParser::GetJtagToSwd() const
+SWDBaseSequnce& SWDParser::GetJtagToSwd()
 {
     return mJtagToSwd;
 }
-const SWDBaseSequnce& SWDParser::GetSwdToJtag() const
+SWDBaseSequnce& SWDParser::GetSwdToJtag()
 {
     return mSwdToJtag;
 }
-const SWDBaseSequnce& SWDParser::GetOperation() const
+SWDBaseSequnce& SWDParser::GetOperation()
 {
     return mTran;
 }
-const SWDBaseSequnce& SWDParser::GetIdleCycles() const
+SWDBaseSequnce& SWDParser::GetIdleCycles()
 {
     return mIdleCycles;
 }
-const SWDBaseSequnce& SWDParser::GetJtagTlr() const
+SWDBaseSequnce& SWDParser::GetJtagTlr()
 {
     return mJtagTlr;
 }
-const SWDBaseSequnce& SWDParser::GetJtagToDs() const
+SWDBaseSequnce& SWDParser::GetJtagToDs()
 {
     return mJtagToDs;
 }
-const SWDBaseSequnce& SWDParser::GetSwdToDs() const
+SWDBaseSequnce& SWDParser::GetSwdToDs()
 {
     return mSwdToDs;
 }
-const SWDBaseSequnce& SWDParser::GetDsSelectionAlertPreamble() const
+SWDBaseSequnce& SWDParser::GetDsSelectionAlertPreamble()
 {
     return mDsSelectionAlertPreamble;
 }
-const SWDBaseSequnce& SWDParser::GetDsSelectionAlert() const
+SWDBaseSequnce& SWDParser::GetDsSelectionAlert()
 {
     return mDsSelectionAlert;
 }
-const SWDBaseSequnce& SWDParser::GetDsActivationCodePreamble() const
+SWDBaseSequnce& SWDParser::GetDsActivationCodePreamble()
 {
     return mDsActivationCodePreamble;
 }
-const SWDBaseSequnce& SWDParser::GetDsActivationCode() const
+SWDBaseSequnce& SWDParser::GetDsActivationCode()
 {
     return mDsActivationCode;
 }
@@ -1812,7 +1999,7 @@ void SWDParser::SetOperation()
         switch( mTran.reg )
         {
             case SWDRegisters::SWDR_DP_DPIDR:
-                // if this is read DPIDR, capture the Version of the DP architecture implemented
+                // if this is read DPIDR, capture the Version of the DP architecture implemented.
                 switch( ( mTran.data >> 12u ) & 0x0fu )
                 {
                 case 0x01u:
@@ -1830,7 +2017,7 @@ void SWDParser::SetOperation()
                 }
                 break;
             case SWDRegisters::SWDR_DP_CTRL_STAT:
-                // Capture ORUNDETECT bit of DP CTRL/STAT register
+                // Capture the ORUNDETECT bit of the DP CTRL/STAT register when reading from or writing to it.
                 mTran.SetOrunDetect( ( mTran.data & 0x00000001u ) != 0u );
                 break;
             case SWDRegisters::SWDR_DP_SELECT:
@@ -1842,12 +2029,66 @@ void SWDParser::SetOperation()
                 mTran.SetTurnaroundNumber( ( ( mTran.data >> 8u ) & 0x03u ) + 1u );
                 break;
             default:
+                if (mTran.IsRead())
+                {
+                    // Read op
+                    if( mTran.IsAp() || ( mTran.reg == SWDRegisters::SWDR_DP_RDBUFF ) )
+                    {
+                        CapureApRegData( mTran.lastRegister );
+                    }
+                }
+                else
+                {
+                    // Write op
+                    CapureApRegData( mTran.reg );
+                }
                 break;
+        }
+        // Update previous AP read operation register
+        if( mTran.IsRead() )
+        {
+            if( mTran.IsAp() )
+            {
+                mTran.lastRegister = mTran.reg;
+            }
+            else
+            {
+                if( mTran.reg == SWDRegisters::SWDR_DP_RDBUFF )
+                {
+                    mTran.lastRegister = SWDRegisters::SWDR_UNDEFINED;
+                }
+            }
+        }
+        else
+        {
+            mTran.lastRegister = SWDRegisters::SWDR_UNDEFINED;
         }
     }
     else
     {
         mCurrentProtocol = DebugProtocol::DPROTOCOL_UNKNOWN;
+    }
+}
+
+void SWDParser::CapureApRegData( SWDRegisters reg )
+{
+    switch( reg )
+    {
+    case SWDRegisters::SWDR_AP_CSW:
+        // Capture address auto-increment and packing mode, MEM-AP access size
+        mTran.SetAddrInc( ( mTran.data >> 4u ) & 0x03u );
+        mTran.SetDataSize( mTran.data & 0x07u );
+        break;
+    case SWDRegisters::SWDR_AP_TAR:
+        // Capture TAR, Transfer Address Register
+        mTran.tar = mTran.data;
+        break;
+    case SWDRegisters::SWDR_AP_DRW:
+        // Increment TAR per CSW.AddrInc
+        mTran.IncrementTar();
+        break;
+    default:
+        break;
     }
 }
 

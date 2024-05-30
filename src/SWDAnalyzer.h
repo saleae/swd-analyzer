@@ -46,7 +46,7 @@ class SWDAnalyzer : public Analyzer2
         std::set<DebugProtocol> protocols;
         std::set<SwdFrameTypes> previousFrames;
         bool ( SWDParser::*CompareFn )();
-        const SWDBaseSequnce& ( SWDParser::*GetSequence )() const;
+        SWDBaseSequnce& ( SWDParser::*GetSequence )();
         void ( SWDParser::*UpdateStatus )();
     };
 

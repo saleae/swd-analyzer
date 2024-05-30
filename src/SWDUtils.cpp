@@ -328,7 +328,330 @@ const std::map<SWDRegisters, std::string> REGISTER_NAMES
     { SWDRegisters::SWDR_AP_CIDR3, "CIDR3" }
 };
 
-std::string GetRegisterName( SWDRegisters reg )
+const std::map<SWDRegisters, std::vector<RegisterFieldDescription>> REGISTER_FIELDS = 
+{
+    // DP registers
+    { SWDRegisters::SWDR_DP_DPIDR,
+      { { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 31u, 28u, "REVISION", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 27u, 20u, "PARTNO", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 16u, 16u, "MIN", { { 0u, "YES" }, { 1u, "NO" } } },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 15u, 12u, "VERSION", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 11u, 1u, "DESIGNER", {} } }
+    },
+    { SWDRegisters::SWDR_DP_ABORT,
+      { { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 4u, 4u, "ORUNERRCLR", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 3u, 3u, "WDERRCLR", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 2u, 2u, "STKERRCLR", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 1u, 1u, "STKCMPCLR", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 0u, 0u, "DAPABORT", {} } }
+    },
+    { SWDRegisters::SWDR_DP_CTRL_STAT,
+      { { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 31u, 31u, "CSYSPWRUPACK", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 30u, 30u, "CSYSPWRUPREQ", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 29u, 29u, "CDBGPWRUPACK", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 28u, 28u, "CDBGPWRUPREQ", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 27u, 27u, "CDBGRSTACK", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 26u, 26u, "CDBGRSTREQ", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 24u, 24u, "ERRMODE", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 23u, 12u, "TRNCNT", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 11u, 8u, "MASKLANE", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 7u, 7u, "WDATAERR", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 6u, 6u, "READOK", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 5u, 5u, "STICKYERR", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 4u, 4u, "STICKYCMP", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 3u, 2u, "TRNMODE", { { 0u, "Normal" }, { 1u, "Pushed verify" }, { 2u, "Pushed compare" }, { 3u, "Reserved" } } },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 1u, 1u, "STICKYCMP", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 0u, 0u, "ORUNDETECT", {} } }
+    },
+    { SWDRegisters::SWDR_DP_DLCR,
+      { { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 9u, 8u, "TURNROUND", { { 0u, "1 data period" }, { 1u, "2 data periods" }, { 2u, "3 data periods" }, { 3u, "4 data periods" } } },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1, 7u, 6u, "WIREMODE", { { 0u, "Asynchronous" }, { 1u, "Synchronous" }, { 2u, "Reserved" }, { 3u, "Reserved" } } },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1, 2u, 0u, "PRESCALER", {} } }
+    },
+    { SWDRegisters::SWDR_DP_TARGETID,
+      { { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 31u, 28u, "TREVISION", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 27u, 12u, "TPARTNO", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 11u, 1u, "TDESIGNER", {} } }
+    },
+    { SWDRegisters::SWDR_DP_DLPIDR,
+      { { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 31u, 28u, "TINSTANCE", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 3u, 0u, "PROTVSN", { { 1u, "SWD protocol version 2" } } } }
+    },
+    { SWDRegisters::SWDR_DP_BASEPTR0,
+      { { RegMask::REG_READ | RegMask::REG_V3, 31u, 12u, "PTR", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 0u, 0u, "VALID", {} } }
+    },
+    { SWDRegisters::SWDR_DP_DLPIDR,
+      { { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 0u, 0u, "EA", { { 0u, "An event requires attention" }, { 1u, "There is no event requiring attention" } } } }
+    },
+    { SWDRegisters::SWDR_DP_SELECT,
+      { { RegMask::REG_WRITE | RegMask::REG_V3, 31u, 4u, "APADDR", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2, 31u, 24u, "APSEL", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2, 7u, 4u, "APBANKSEL", {} },
+        { RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 3u, 0u, "DPBANKSEL", {} } }
+    },
+    { SWDRegisters::SWDR_DP_DPIDR1,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 7u, "ERRMODE", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 6u, 0u, "ASIZE", {} } } 
+    },
+    // AP registers
+    { SWDRegisters::SWDR_AP_CSW,
+      { { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 31u, 31u, "DbgSwEnable", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 30u, 24u, "Prot", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2, 23u, 23u, "SPIDEN", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 23u, 23u, "SDeviceEn", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 22u, 21u, "RMEEN", { { 0u, "Realm and Root accesses are disabled" }, { 1u, "Realm access is enabled. Root access is disabled" }, { 3u, "Realm access is enabled. Root access is enabled" } } },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 17u, 17u, "ERRSTOP", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 16u, 16u, "ERRNPASS", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V2 | RegMask::REG_V3, 15u, 12u, "Type", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 11u, 8u, "Mode", { { 0u, "Basic mode" }, { 1u, "Barrier support enabled" } } },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 7u, 7u, "TrInProg", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 6u, 6u, "DeviceEn", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 5u, 4u, "AddrInc", { { 0u, "Auto-increment disabled" }, { 1u, "Increment-single" }, { 2u, "Increment-packed" } } },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 2u, 0u, "Size",
+          { { 0u, "Byte (8-bits)" }, 
+            { 1u, "Halfword (16-bits)" },
+            { 2u, "Word (32-bits)" },
+            { 3u, "Doubleword (64-bits)" },
+            { 4u, "128-bits" },
+            { 5u, "256-bits" } } } } 
+    },
+    { SWDRegisters::SWDR_AP_TRR,
+      { { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 0u, 0u, "ERR", {} } }
+    },
+    { SWDRegisters::SWDR_AP_T0TR,
+      { { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 31u, 28u, "T7", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 27u, 24u, "T6", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 23u, 20u, "T5", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 19u, 16u, "T4", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 15u, 12u, "T3", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 11u, 8u, "T2", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 7u, 4u, "T1", {} },
+        { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 3u, 0u, "T0", {} } }
+    },
+    { SWDRegisters::SWDR_AP_CFG1,
+      { { RegMask::REG_READ | RegMask::REG_V3, 8u, 4u, "TAG0GRAN", { { 0u, "Memory tagging granule is 16 bytes" } } },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "TAG0SIZE", { { 0u, "Memory Tagging Extension not implemented" }, { 4u, "Tag size is 4-bits" } } } }
+    },
+    { SWDRegisters::SWDR_AP_CFG, 
+      { { RegMask::REG_READ | RegMask::REG_V3, 19u, 16u, "TARINC", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 11u, 8u, "ERR", { { 0u, "Error response handling 0" }, { 1u, "Error response handling 1" } } },
+        { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "DARSIZE", { { 0x0u, " DAR0-DAR255 are not implemented" }, { 0xAu, " DAR0-DAR255 are implemented" } } },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 3u, "RME", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 2u, 2u, "LD", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 1u, 1u, "LA", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 0u, 0u, "BE", {} }
+      } 
+    },
+    { SWDRegisters::SWDR_AP_BASE, 
+      { { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 31u, 12u, "BASEADDR", {} }, 
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 0u, 0u, "P", { { 0u, "No debug entry present" }, { 1u, "Debug entry present" } } } }
+    },
+    { SWDRegisters::SWDR_AP_IDR,
+      { { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 31u, 28u, "REVISION", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 27u, 24u, "JEP-106 continuation code", {} },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 23u, 17u, "JEP-106 identity code", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 16u, 13u, "CLASS", { { 0u, "No defined class" }, { 8u, "MEM-AP" } } },
+        { RegMask::REG_READ | RegMask::REG_V1 , 16u, 16u, "CLASS", { { 0u, "not a MEM-AP" }, { 1u, "MEM-AP" } } },
+        { RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 | RegMask::REG_V3, 7u, 4u, "VARIANT", {} },
+        { RegMask::REG_READ | RegMask::REG_V2 | RegMask::REG_V3, 3u, 0u, "TYPE",
+          { { 0u, "JTAG connection" },
+            { 1u, "AMBA AHB3 bus" },
+            { 2u, "AMBA APB2 or APB3 bus" },
+            { 4u, "AMBA AXI3 or AXI4 bus, with optional ACE-Lite support" },
+            { 5u, "AMBA AHB5 bus" },
+            { 6u, "AMBA APB4 and APB5 bus" },
+            { 7u, "AMBA AXI5 bus" },
+            { 8u, "AMBA AHB5 with enhanced HPROT" } } }
+      }
+    },
+    { SWDRegisters::SWDR_AP_ITCTRL,
+      { { RegMask::REG_READ | RegMask::REG_WRITE | RegMask::REG_V3, 0u, 0u, "IME", {} } }
+    },
+    { SWDRegisters::SWDR_AP_AUTHSTATUS,
+      { { RegMask::REG_READ | RegMask::REG_V3, 27u, 26u, "RTNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 25u, 24u, "RTID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 23u, 22u, "SUNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 21u, 20u, "SUID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 19u, 18u, "NSUNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 17u, 16u, "NSUID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 15u, 14u, "RLNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 13u, 12u, "RLID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 11u, 10u, "HNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 9u, 8u, "HID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 7u, 6u, "SNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 5u, 4u, "SID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 2u, "NSNID", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 1u, 0u, "NSID", {} } }
+    },
+    { SWDRegisters::SWDR_AP_DEVARCH,
+      { { RegMask::REG_READ | RegMask::REG_V3, 31u, 21u, "ARCHITECT", { { 0x23B, "Arm" } } },
+        { RegMask::REG_READ | RegMask::REG_V3, 20u, 20u, "PRESENT", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 19u, 16u, "REVISION", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 15u, 0u, "ARCHID", { { 0x0A17, "MEM-AP" } } } } 
+    },
+    { SWDRegisters::SWDR_AP_DEVTYPE,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "SUB", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "MAJOR", {} } } 
+    },
+    { SWDRegisters::SWDR_AP_PIDR4,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "SIZE", {} }, 
+      { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "DES_2", {} } }
+    },
+    { SWDRegisters::SWDR_AP_PIDR0,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 0u, "PART_0", {} } }
+    },
+    { SWDRegisters::SWDR_AP_PIDR1,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "DES_0", {} }, 
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "PART_1", {} } }
+    },
+    { SWDRegisters::SWDR_AP_PIDR2,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "REVISION", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 3u, "JEDEC", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 2u, 0u, "DES_1", {} } }
+    },
+    { SWDRegisters::SWDR_AP_PIDR3,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "REVAND", {} }, 
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "CMOD", {} } }
+    },
+    { SWDRegisters::SWDR_AP_CIDR0,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 0u, "PRMBL_0", {} } }
+    },
+    { SWDRegisters::SWDR_AP_CIDR1,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 4u, "CLASS", {} },
+        { RegMask::REG_READ | RegMask::REG_V3, 3u, 0u, "PRMBL_1", {} } }
+    },
+    { SWDRegisters::SWDR_AP_CIDR2, 
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 0u, "PRMBL_2", {} } }
+    },
+    { SWDRegisters::SWDR_AP_CIDR3,
+      { { RegMask::REG_READ | RegMask::REG_V3, 7u, 0u, "PRMBL_3", {} } }
+    }
+};
+
+bool IsApReg( SWDRegisters reg )
+{
+    return ( ( reg >= SWDRegisters::SWDR_AP_CSW ) && ( reg <= SWDRegisters::SWDR_AP_CIDR3 ) );
+}
+
+bool IsApDataReg( SWDRegisters reg )
+{
+    return ( ( reg == SWDRegisters::SWDR_AP_DRW ) ||
+        ( ( reg >= SWDRegisters::SWDR_AP_BD0 ) && ( reg <= SWDRegisters::SWDR_AP_BD3 ) ) ||
+        ( ( reg >= SWDRegisters::SWDR_AP_DAR0 ) && ( reg <= SWDRegisters::SWDR_AP_DAR255 ) ) );
+}
+
+U32 GetMemAddr( const SWDRegisters dataReg, const U32 tar )
+{
+    U32 memAddr = 0;
+    if( dataReg == SWDRegisters::SWDR_AP_DRW )
+    {
+        memAddr = tar;
+    }
+    else if( ( dataReg >= SWDRegisters::SWDR_AP_BD0 ) && ( dataReg <= SWDRegisters::SWDR_AP_BD3 ) )
+    {
+        memAddr = tar + ( ( static_cast<U16>( dataReg ) - static_cast<U16>( SWDRegisters::SWDR_AP_BD0 ) ) * 4u );
+    }
+    else if( ( dataReg >= SWDRegisters::SWDR_AP_DAR0 ) && ( dataReg <= SWDRegisters::SWDR_AP_DAR255 ) )
+    {
+        memAddr = tar + ( ( static_cast<U16>( dataReg ) - static_cast<U16>( SWDRegisters::SWDR_AP_DAR0 ) ) * 4u );
+    }
+    return memAddr;
+}
+
+std::string GetReadRegisterValueDesc( const SWDRegistersUnion& swdRegCouple, const U32 data, const DisplayBase displayBase,
+                                      const DPVersion version )
+{
+    std::string regValue;
+    regValue.reserve( 256u );
+    if( IsApReg( swdRegCouple.reg.current ) )
+    {
+        if( swdRegCouple.reg.prev == SWDRegisters::SWDR_UNDEFINED )
+        {
+            // First AP Read
+            regValue = "Ignored AP first read data";
+        }
+        else
+        {
+            // Next AP Reads
+            regValue = "APREG=" + GetRegisterName( swdRegCouple.reg.prev );
+            // Data Read/Write register
+            if( IsApDataReg( swdRegCouple.reg.prev ) )
+            {
+                U32 memAddr = GetMemAddr( swdRegCouple.reg.prev, swdRegCouple.reg.memAddr );
+                regValue += ", MEMADDR=" + Int2StrSal( memAddr, displayBase, 32 );
+            }
+            std::string regValueDesc = GetRegisterValueDesc( swdRegCouple.reg.prev, data, displayBase, version, true );
+            if( !regValueDesc.empty() )
+            {
+                regValue += ", " + regValueDesc;
+            }
+        }
+    }
+    else
+    {
+        // DP Read
+        if( swdRegCouple.reg.current == SWDRegisters::SWDR_DP_RDBUFF )
+        {
+            // DP Read of READBUFF
+            if( swdRegCouple.reg.prev != SWDRegisters::SWDR_UNDEFINED )
+            {
+                // AP reg on prev operation
+                regValue = "APREG=" + GetRegisterName( swdRegCouple.reg.prev );
+                // Data Read/Write register
+                if( IsApDataReg( swdRegCouple.reg.prev ) )
+                {
+                    U32 memAddr = GetMemAddr( swdRegCouple.reg.prev, swdRegCouple.reg.memAddr );
+                    regValue += ", MEMADDR=" + Int2StrSal( memAddr, displayBase, 32 );
+                }
+                std::string regValueDesc = GetRegisterValueDesc( swdRegCouple.reg.prev, data, displayBase, version, true );
+                if( !regValueDesc.empty() )
+                {
+                    regValue += ", " + regValueDesc;
+                }
+            }
+        }
+        else
+        {
+            // DP Read except READBUFF
+            regValue = GetRegisterValueDesc( swdRegCouple.reg.current, data, displayBase, version, true );
+        }
+    }
+
+    return regValue;
+}
+
+std::string GetWriteRegisterValueDesc( const SWDRegistersUnion& swdRegCouple, const U32 data, const DisplayBase displayBase,
+                                       const DPVersion version )
+{
+    std::string regValue;
+    regValue.reserve( 256u );
+    if( IsApReg( swdRegCouple.reg.current ) )
+    {
+        // AP Write
+        regValue = "APREG=" + GetRegisterName( swdRegCouple.reg.current );
+        // Data Read/Write register
+        if( IsApDataReg( swdRegCouple.reg.current ) )
+        {
+            U32 memAddr = GetMemAddr( swdRegCouple.reg.current, swdRegCouple.reg.memAddr );
+            regValue += ", MEMADDR=" + Int2StrSal( memAddr, displayBase, 32 );
+        }
+        std::string regValueDesc =
+            GetRegisterValueDesc( swdRegCouple.reg.current, data, displayBase, version, false );
+        if( !regValueDesc.empty() )
+        {
+            regValue += ", " + regValueDesc;
+        }
+    }
+    else
+    {
+        // DP Write
+        regValue = GetRegisterValueDesc( swdRegCouple.reg.current, data, displayBase, version, false );
+    }
+    return regValue;
+}
+
+std::string GetRegisterName( const SWDRegisters reg )
 {
     auto search = REGISTER_NAMES.find( reg );
     if( search != REGISTER_NAMES.end() )
@@ -341,263 +664,45 @@ std::string GetRegisterName( SWDRegisters reg )
     }
 }
 
-std::string GetRegisterValueDesc( SWDRegisters reg, U32 val, DisplayBase displayBase, DPVersion version )
+std::string GetRegisterValueDesc( const SWDRegisters reg, const U32 val, const DisplayBase displayBase, const DPVersion version, const bool isRead )
 {
-    std::string retVal;
-
-    switch( reg )
+    U8 access = static_cast<U8>( isRead ? RegMask::REG_READ : RegMask::REG_WRITE );
+    switch( version )
     {
-        case SWDRegisters::SWDR_DP_DPIDR:
-            retVal = std::string( "DESIGNER=" ) + Int2StrSal( val & 0x0fffu, displayBase, 12u );
-            retVal += std::string( ", VERSION=" ) + Int2StrSal( ( val >> 12u ) & 0x0fu, displayBase, 4u );
-            retVal += std::string( ", MIN=" ) + ( ( ( ( val >> 16u ) & 0x01u ) == 0 ) ? "YES" : "NO" );
-            retVal += std::string( ", PARTNO=" ) + Int2StrSal( ( val >> 20u ) & 0xffu, displayBase, 8u );
-            retVal += std::string( ", REVISION=" ) + Int2StrSal( ( val >> 28u ) & 0x0fu, displayBase, 4u );
+        case DPVersion::DP_V1:
+            access = access | RegMask::REG_V1;
             break;
-
-        case SWDRegisters::SWDR_DP_ABORT:
-            retVal = std::string( "ORUNERRCLR=" ) + ( ( val & 16u ) ? "1" : "0" );
-            retVal += std::string( ", WDERRCLR=" ) + ( ( val & 8u ) ? "1" : "0" );
-            retVal += std::string( ", STKERRCLR=" ) + ( ( val & 4u ) ? "1" : "0" );
-            retVal += std::string( ", STKCMPCLR=" ) + ( ( val & 2u ) ? "1" : "0" );
-            retVal += std::string( ", DAPABORT=" ) + ( ( val & 1u ) ? "1" : "0" );
+        case DPVersion::DP_V2:
+            access = access | RegMask::REG_V2;
             break;
-
-        case SWDRegisters::SWDR_DP_CTRL_STAT:
-            retVal = std::string( "CSYSPWRUPACK=" ) + ( ( val & ( 1u << 31u ) ) ? "1" : "0" );
-            retVal += std::string( ", CSYSPWRUPREQ=" ) + ( ( val & ( 1u << 30u ) ) ? "1" : "0" );
-            retVal += std::string( ", CDBGPWRUPACK=" ) + ( ( val & ( 1u << 29u ) ) ? "1" : "0" );
-            retVal += std::string( ", CDBGPWRUPREQ=" ) + ( ( val & ( 1u << 28u ) ) ? "1" : "0" );
-            retVal += std::string( ", CDBGRSTACK=" ) + ( ( val & ( 1u << 27u ) ) ? "1" : "0" );
-            retVal += std::string( ", CDBGRSTREQ=" ) + ( ( val & ( 1u << 26u ) ) ? "1" : "0" );
-            if( version >= DPVersion::DP_V3 )
-            {
-                // available starting from DPv3
-                retVal += std::string( ", ERRMODE=" ) + ( ( val & ( 1u << 24u ) ) ? "1" : "0" );
-            }
-            retVal += ", TRNCNT=" + Int2StrSal( ( val >> 12u ) & 0x0fffu, displayBase, 12u );
-            retVal += ", MASKLANE=" + Int2StrSal( ( val >> 8u ) & 0x0fu, displayBase, 4u );
-            retVal += std::string( ", WDATAERR=" ) + ( ( val & ( 1u << 7u ) ) ? "1" : "0" );
-            retVal += std::string( ", READOK=" ) + ( ( val & ( 1u << 6u ) ) ? "1" : "0" );
-            retVal += std::string( ", STICKYERR=" ) + ( ( val & ( 1u << 5u ) ) ? "1" : "0" );
-            retVal += std::string( ", STICKYCMP=" ) + ( ( val & ( 1u << 4u ) ) ? "1" : "0" );
-            retVal += ", TRNMODE=";
-            switch( ( val >> 2u ) & 3u )
-            {
-                case 0u:
-                    retVal += "Normal";
-                    break;
-                case 1u:
-                    retVal += "Pushed verify";
-                    break;
-                case 2u:
-                    retVal += "Pushed compare";
-                    break;
-                case 3u:
-                    retVal += "Reserved";
-                    break;
-                }
-            retVal += std::string( ", STICKYORUN=" ) + ( ( val & ( 1u << 1u ) ) ? "1" : "0" );
-            retVal += std::string( ", ORUNDETECT=" ) + ( ( val & ( 1u << 0u ) ) ? "1" : "0" );
-            break;
-
-        case SWDRegisters::SWDR_DP_DLCR:
-            retVal = "TURNAROUND=" + Int2StrSal( ( val >> 8u ) & 3u, displayBase, 2u );
-            retVal += " (" + Int2StrSal( ( ( val >> 8u ) & 3u ) + 1u, Decimal, 2u ) + " data period(s))";
-            if( version == DPVersion::DP_V1 )
-            {
-                retVal += ", WIREMODE=" + Int2StrSal( ( val >> 4u ) & 0x0f, displayBase, 4u ) + " ";
-                switch( ( val >> 6u ) & 3u )
-                {
-                    case 0u:
-                        retVal += "Asynchronous";
-                        break;
-                    case 1u:
-                        retVal += "Synchronous";
-                        break;
-                    default:
-                        retVal += "Reserved";
-                        break;
-                }
-                retVal += ", PRESCALER=" + Int2StrSal( val & 3u, displayBase, 2u );
-            }
-            break;
-
-        case SWDRegisters::SWDR_DP_TARGETID:
-            if( version >= DPVersion::DP_V2 )
-            {
-                // available starting from DPv2
-                retVal = std::string( "TREVISION=" ) + Int2StrSal( ( val >> 28u ) & 0xfu, displayBase );
-                retVal += ", TPARTNO=" + Int2StrSal( ( val >> 12u ) & 0xffffu, displayBase );
-                retVal += ", TDESIGNER=" + Int2StrSal( ( val >> 1u ) & 0x7ffu, displayBase );
-            }
-            break;
-
-        case SWDRegisters::SWDR_DP_DLPIDR:
-            if( version >= DPVersion::DP_V2 )
-            {
-                // available starting from DPv2
-                retVal = std::string( "TINSTANCE=" ) + Int2StrSal( ( val >> 28u ) & 0xfu, displayBase );
-                retVal += ", PROTVSN=" + Int2StrSal( val & 0x0fu, displayBase ) + " ";
-                retVal += ( ( val & 0x0fu ) == 1u ) ? "(SWD protocol version 2)" : "(Reserved)";
-            }
-            break;
-
-        case SWDRegisters::SWDR_DP_BASEPTR0:
-            if( version == DPVersion::DP_V3 )
-            {
-                retVal = "PTR=" + Int2StrSal( ( val >> 12u ) & 0xfffffu, displayBase );
-                retVal += std::string( ", VALID=" ) + ( ( val & 1u ) ? "1" : "0" );
-            }
-            break;
-
-        case SWDRegisters::SWDR_DP_EVENTSTAT:
-            if( version >= DPVersion::DP_V2 )
-            {
-                // available starting from DPv2
-                retVal = std::string( "EA=" ) + ( ( val & 1u ) ? "1 (There is no event requiring attention)" : "0 (An event requires attention)" );
-            }
-            break;
-
-            // case SWDR_DP_RESEND:     break;      // just raw data
-
-        case SWDRegisters::SWDR_DP_SELECT:
-            if( version < DPVersion::DP_V3 )
-            {
-                retVal = "APSEL=" + Int2StrSal( ( val >> 24u ) & 0xffu, displayBase );
-                retVal += ", APBANKSEL=" + Int2StrSal( ( val >> 4u ) & 0x0fu, displayBase, 4u );
-            }
-            else
-            {
-                retVal = "APBANKADDR=" + Int2StrSal( val & 0xFFFFFFF0u, displayBase );
-            }
-            retVal += ", DPBANKSEL=" + Int2StrSal( val & 0xFu, displayBase, 4u );
-            break;
-
-        // case SWDR_DP_RDBUFF:     break;      // just raw data
-        // case SWDR_DP_ROUTESEL:       break;      // just raw data
-
-        case SWDRegisters::SWDR_DP_DPIDR1:
-            retVal = std::string( "ERRMODE=" ) + ( ( val & ( 1u << 7u ) ) ? "1" : "0" );
-            retVal += ", ASIZE=" + Int2StrSal( val & 0x7Fu, displayBase, 7u );
-            break;
-
-        // AP
-        case SWDRegisters::SWDR_AP_IDR:
-            retVal = "Revision=" + Int2StrSal( val >> 28u, displayBase, 4u );
-            retVal += ", JEP-106 continuation=" + Int2StrSal( ( val >> 24u ) & 0x0fu, displayBase, 4u );
-            retVal += ", JEP-106 identity=" + Int2StrSal( ( val >> 17u ) & 0x7fu, displayBase, 7u );
-            retVal +=
-                std::string( ", Class=" ) + ( ( val & ( 1u << 16u ) ) ? "This AP is a Memory Acces Port" : "This AP is not a Memory Acces Port" );
-            retVal += ", AP Identfication=" + Int2StrSal( val & 0xffu, displayBase );
-            break;
-        case SWDRegisters::SWDR_AP_CSW:
-            retVal = std::string( "DbgSwEnable=" ) + ( ( val & ( 1u << 31u ) ) ? "1" : "0" );
-            retVal += ", Prot=" + Int2StrSal( ( val >> 24u ) & 0x7fu, displayBase, 7 );
-            if( version < DPVersion::DP_V3 )
-            {
-                retVal += std::string( ", SPIDEN=" ) + ( ( val & ( 1u << 23u ) ) ? "1" : "0" );
-            }
-            else
-            {
-                retVal += std::string( ", SDeviceEn=" ) + ( ( val & ( 1u << 23u ) ) ? "1" : "0" );
-                retVal += ", RMEEN=" + Int2StrSal( ( val >> 21u ) & 0x03u, displayBase, 2u );
-                retVal += std::string( ", ERRSTOP=" ) + ( ( val & ( 1u << 17u ) ) ? "1" : "0" );
-                retVal += std::string( ", ERRNPASS=" ) + ( ( val & ( 1u << 16u ) ) ? "1" : "0" );
-                retVal += std::string( ", MTE=" ) + ( ( val & ( 1u << 15u ) ) ? "1" : "0" );
-            }
-            retVal += ", Type=" + Int2StrSal( ( val >> 12u ) & 0x0fu, displayBase, 4u );
-            retVal += ", Mode=" + Int2StrSal( ( val >> 8u ) & 0x0fu, displayBase, 4u );
-            retVal += std::string( ", TrInProg=" ) + ( ( val & ( 1u << 7u ) ) ? "1" : "0" );
-            retVal += std::string( ", DeviceEn=" ) + ( ( val & ( 1u << 6u ) ) ? "1" : "0" );
-            retVal += ", AddrInc=";
-            switch( ( val >> 4u ) & 0x3u )
-            {
-                case 0u:
-                    retVal += "Auto-increment off";
-                    break;
-                case 1u:
-                    retVal += "Increment single";
-                    break;
-                case 2u:
-                    retVal += "Increment packed";
-                    break;
-                default:
-                    retVal += "Reserved";
-                    break;
-            }
-            retVal += ", Size=";
-            switch( val & 0x7u )
-            {
-                case 0u:
-                    retVal += "Byte (8 bits)";
-                    break;
-                case 1u:
-                    retVal += "Halfword (16 bits)";
-                    break;
-                case 2u:
-                    retVal += "Word (32 bits)";
-                    break;
-                case 3u:
-                    retVal += "Doubleword (64-bits)";
-                    break;
-                case 4u:
-                    retVal += "128-bits";
-                    break;
-                case 5u:
-                    retVal += "256-bits";
-                    break;
-                default:
-                    retVal += "Reserved";
-                    break;
-            }
-            break;
-        // case SWDR_AP_TAR:            break;      // these are just raw data
-        // case SWDR_AP_DRW:            break;
-        // case SWDR_AP_BD0:            break;
-        // case SWDR_AP_BD1:            break;
-        // case SWDR_AP_BD2:            break;
-        // case SWDR_AP_BD3:            break;
-        case SWDRegisters::SWDR_AP_CFG:
-            if( version >= DPVersion::DP_V3 )
-            {
-                retVal = "TARINC=" + Int2StrSal( ( val >> 16u ) & 0x0fu, displayBase, 4u );
-                retVal += ", ERR=" + Int2StrSal( ( val >> 8u ) & 0x0fu, displayBase, 4u );
-                retVal += ", DARSIZE=" + Int2StrSal( ( val >> 4u ) & 0x0fu, displayBase, 4u );
-                retVal += std::string( ", RME=" ) + ( ( val & ( 1u << 3u ) ) ? "1" : "0" );
-                retVal += ", ";
-            }
-            else
-            {
-                retVal = "";
-            }
-            if( version >= DPVersion::DP_V2 )
-            {
-                retVal += std::string( "LD=" ) + ( ( val & ( 1u << 2u ) ) ? "1" : "0" );
-                retVal += std::string( ", LA=" ) + ( ( val & ( 1u << 1u ) ) ? "1" : "0" );
-                retVal += ", ";
-            }
-            if( val & 1u )
-                retVal += "Big-endian";
-            else
-                retVal += "Little-endian";
-
-            break;
-        case SWDRegisters::SWDR_AP_BASE:
-            retVal = "BASEADDR=" + Int2StrSal( val >> 12u, displayBase, 20u );
-            retVal += std::string( ", Format=" ) + ( ( val & ( 1u << 1u ) ) ? "1" : "0" );
-            retVal += ", Entry present=";
-            if( val & 1u )
-                retVal += "Debug entry present";
-            else
-                retVal += "No debug entry present";
-
+        case DPVersion::DP_V3:
+            access = access | RegMask::REG_V3;
             break;
         default:
             break;
     }
-
-    return retVal;
+    std::string valueDesc;
+    auto search = REGISTER_FIELDS.find( reg );
+    if( search != REGISTER_FIELDS.end() )
+    {
+        valueDesc.reserve( 256u );
+        for( const auto& field : search->second )
+        {
+            if((field.Access & access) == access)
+            {
+                std::string fieldDesc = field.GetStrFieldValue( val, displayBase );
+                if( !fieldDesc.empty() )
+                {
+                    if( !valueDesc.empty() )
+                    {
+                        valueDesc += ", ";
+                    }
+                }
+                valueDesc += fieldDesc;
+            }
+        }
+    }
+    return valueDesc;
 }
 
 std::string Int2Str( const U8 i )
@@ -612,4 +717,35 @@ std::string Int2StrSal( const U64 i, DisplayBase base, const U32 maxBits )
     char numberStr[ 256 ];
     AnalyzerHelpers::GetNumberString( i, base, maxBits, numberStr, sizeof( numberStr ) );
     return numberStr;
+}
+
+const U32 RegisterFieldDescription::GetFieldValue( const U32 regValue ) const
+{
+    const U32 mask = BitMaskRange<U32>( FiledMSB + 1, FiledLSB );
+    return ( regValue & mask ) >> FiledLSB;
+}
+
+std::string RegisterFieldDescription::GetStrFieldValue( const U32 regValue, DisplayBase base ) const
+{
+    const U32 fieldValue = GetFieldValue( regValue );
+    std::string resultStr;
+    resultStr.reserve( 256u );
+    resultStr = FieldName + "=";
+    if( FiledLSB == FiledMSB )
+    {
+        // Single bit
+        resultStr += ( fieldValue == 0 ) ? "0" : "1";
+    }
+    else
+    {
+        // Bit range
+        resultStr += Int2StrSal( fieldValue, base, FiledMSB - FiledLSB + 1 );
+    }
+    auto search = ValuesDesc.find( fieldValue );
+    if( search != ValuesDesc.end() )
+    {
+        resultStr += " (" + search->second + ")";
+    }
+
+    return resultStr;
 }
