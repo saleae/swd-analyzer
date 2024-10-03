@@ -26,6 +26,10 @@ src/SWDTypes.cpp
 src/SWDTypes.h
 src/SWDUtils.cpp
 src/SWDUtils.h
+src/VersionInfo.h
+src/VersionInfo.cpp
 )
 
 add_analyzer_plugin(swd_analyzer SOURCES ${SOURCES})
+
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} PRE_BUILD COMMAND ${CMAKE_COMMAND} -P "${CMAKE_SOURCE_DIR}/src/PluginVersion.cmake")

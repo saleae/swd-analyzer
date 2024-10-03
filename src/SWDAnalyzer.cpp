@@ -1,4 +1,3 @@
-#include <vector>
 #include <algorithm>
 
 #include <AnalyzerChannelData.h>
@@ -7,7 +6,7 @@
 #include "SWDAnalyzerSettings.h"
 #include "SWDUtils.h"
 
-SWDAnalyzer::SWDAnalyzer() : mSimulationInitilized( false )
+SWDAnalyzer::SWDAnalyzer() : Analyzer2(), mSWDIO(), mSWCLK(), mSimulationInitilized( false )
 {
     SetAnalyzerSettings( &mSettings );
 }
@@ -37,40 +36,102 @@ void SWDAnalyzer::WorkerThread()
 
     mSWDParser.Setup( mSWDIO, mSWCLK, this );
 
-    // these are our three objects that SWDParser will fill with data
-    // on calls to IsOperation or IsLineReset
-    SWDOperation tran;
-    SWDLineReset reset;
-    SWDBit error_bit;
-
     mSWDParser.Clear();
 
-    // For every new bit the parser extracts from the stream,
-    // ask if this can be a valid operation or line reset.
-    // A valid operation will have the constant part of the request correctly set,
-    // and also the parity bits will be correct.
-    // A valid line reset has at least 50 high bits in succession.
+    // Set parser initial values
+    mSWDParser.SetCurrentProtocol( mSettings.mDProtocol );
+    mSWDParser.SetLastFrameType( mSettings.mLastFrame );
+    mSWDParser.SetDPVersion( mSettings.mDPVersion );
+    mSWDParser.SetNumTurnarounds( mSettings.mNumTurnarounds );
+    mSWDParser.SetOverrunDetection( mSettings.mOverrunDetection );
+    mSWDParser.SetSelectRegister( mSettings.mSelectRegister );
+
+    SWDErrorBits& errorBits = mSWDParser.GetErrorBits();
+    SwdFrameTypes previousFrameType = mSWDParser.GetLastFrameType();
+    DebugProtocol dProtocol = mSWDParser.GetCurrentProtocol();
+
     for( ;; )
     {
-        if( mSWDParser.IsOperation( tran ) )
+        if( mSWDParser.IsBufferEmpty() || ( bestFixedLengthCmpResult == SeqCmpResult::SEQ_MATCH_PARTIALLY ) ||
+            ( bestVariableLengthCmpResult == SeqCmpResult::SEQ_MATCH_PARTIALLY ) || ( bestCompleteMatched <= bestPartialyMatched ) )
         {
-            tran.AddFrames( mResults.get() );
-            tran.AddMarkers( mResults.get() );
-
-            mResults->CommitResults();
+            // Get the next bit from the SWDIO channel
+            mSWDParser.AddBitToBuffer();
         }
-        else if( mSWDParser.IsLineReset( reset ) )
-        {
-            reset.AddFrames( mResults.get() );
 
-            mResults->CommitResults();
-        }
-        else
+        ClearBestMatchingResults();
+
+        for( auto wrappedSeqRef : mSWDParser.GetSequences() )
         {
-            // This is neither a valid transaction nor a valid reset,
-            // so remove the first bit and try again.
-            // We're dropping the error bit into oblivion.
-            error_bit = mSWDParser.PopFrontBit();
+            SWDBaseSequence& sequence = wrappedSeqRef.get();
+            if( sequence.IsDebugProtocolAllowed( dProtocol ) )
+            {
+                if( sequence.IsPreviousFrameTypeAllowed( previousFrameType ) )
+                {
+                    const SeqCmpResult sequenceMached = mSWDParser.Match( sequence );
+                    const bool fixedLengthSequence = sequence.IsFixedLengthSequence();
+                    if( fixedLengthSequence )
+                    {
+                        bestFixedLengthCmpResult = BestMach( bestFixedLengthCmpResult, sequenceMached );
+                    }
+                    else
+                    {
+                        bestVariableLengthCmpResult = BestMach( bestVariableLengthCmpResult, sequenceMached );
+                        if( sequenceMached == SeqCmpResult::SEQ_MATCH_PARTIALLY )
+                        {
+                            const auto numberCheckedBits = sequence.GetNumberCheckedBits();
+                            if( numberCheckedBits > bestPartialyMatched )
+                            {
+                                bestPartialyMatched = numberCheckedBits;
+                            }
+                        }
+                        else if( sequenceMached == SeqCmpResult::SEQ_MATCH_COMPLETELY )
+                        {
+                            const auto numberCheckedBits = sequence.GetNumberCheckedBits();
+                            if( numberCheckedBits > bestCompleteMatched )
+                            {
+                                bestCompleteMatched = numberCheckedBits;
+                            }
+                        }
+                    }
+                    if( ( sequenceMached == SeqCmpResult::SEQ_MATCH_COMPLETELY ) &&
+                        ( fixedLengthSequence || ( ( bestFixedLengthCmpResult != SeqCmpResult::SEQ_MATCH_PARTIALLY ) &&
+                                                   ( bestCompleteMatched > bestPartialyMatched ) ) ) )
+                    {
+                        if( !errorBits.Empty() )
+                        {
+                            errorBits.SetProtocol( dProtocol );
+                            errorBits.UpdateBitInfo();
+                            errorBits.AddFrames( mResults.get() );
+                            mResults->CommitResults();
+                            errorBits.Clear();
+                        }
+
+                        mSWDParser.CopyBits( sequence );
+
+                        sequence.AddFrames( mResults.get() );
+                        sequence.AddMarkers( mResults.get() );
+                        mResults->CommitResults();
+
+                        sequence.UpdateAdiState();
+
+                        sequence.Clear();
+
+                        previousFrameType = mSWDParser.GetLastFrameType();
+                        dProtocol = mSWDParser.GetCurrentProtocol();
+                        ClearBestMatchingResults();
+
+                        break;
+                    }
+                }
+            }
+        }
+        if( ( bestFixedLengthCmpResult == SeqCmpResult::SEQ_MISMATCH ) && ( bestVariableLengthCmpResult == SeqCmpResult::SEQ_MISMATCH ) )
+        {
+            // This is neither a valid transaction nor a valid sequence,
+            // so collect these bits and go forward.
+            errorBits.PushBackBit( mSWDParser.PopFrontBit() );
+            errorBits.UpdateAdiState();
         }
 
         ReportProgress( mSWDIO->GetSampleNumber() );
@@ -82,8 +143,21 @@ bool SWDAnalyzer::NeedsRerun()
     return false;
 }
 
-U32 SWDAnalyzer::GenerateSimulationData( U64 minimum_sample_index, U32 device_sample_rate,
-                                         SimulationChannelDescriptor** simulation_channels )
+DPVersion SWDAnalyzer::GetDPVersion() const
+{
+    return mSWDParser.GetDPVersion();
+}
+
+void SWDAnalyzer::ClearBestMatchingResults()
+{
+    bestFixedLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+	bestVariableLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+	bestPartialyMatched = 0u;
+	bestCompleteMatched = 0u;
+}
+
+U32 SWDAnalyzer::GenerateSimulationData( U64 minimumSampleIndex, U32 deviceSampleRate,
+                                         SimulationChannelDescriptor** simulationChannels )
 {
     if( !mSimulationInitilized )
     {
@@ -91,7 +165,7 @@ U32 SWDAnalyzer::GenerateSimulationData( U64 minimum_sample_index, U32 device_sa
         mSimulationInitilized = true;
     }
 
-    return mSimulationDataGenerator.GenerateSimulationData( minimum_sample_index, device_sample_rate, simulation_channels );
+    return mSimulationDataGenerator.GenerateSimulationData( minimumSampleIndex, deviceSampleRate, simulationChannels );
 }
 
 U32 SWDAnalyzer::GetMinimumSampleRateHz()

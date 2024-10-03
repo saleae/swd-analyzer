@@ -12,18 +12,32 @@ class SWDAnalyzerSettings : public AnalyzerSettings
     SWDAnalyzerSettings();
     virtual ~SWDAnalyzerSettings();
 
-    virtual bool SetSettingsFromInterfaces();
-    virtual void LoadSettings( const char* settings );
-    virtual const char* SaveSettings();
+    bool SetSettingsFromInterfaces() override;
+    void LoadSettings( const char* settings ) override;
+    const char* SaveSettings() override;
 
     void UpdateInterfacesFromSettings();
 
     Channel mSWDIO;
     Channel mSWCLK;
 
+    DebugProtocol mDProtocol;
+    SwdFrameTypes mLastFrame;
+    DPVersion mDPVersion;
+    U8 mNumTurnarounds;
+    bool mOverrunDetection;
+    U32 mSelectRegister;
+
+
   protected:
     AnalyzerSettingInterfaceChannel mSWDIOInterface;
     AnalyzerSettingInterfaceChannel mSWCLKInterface;
+    AnalyzerSettingInterfaceNumberList mDProtocolInterface;
+    AnalyzerSettingInterfaceNumberList mLastFrameInterface;
+    AnalyzerSettingInterfaceNumberList mDPVersionInterface;
+    AnalyzerSettingInterfaceNumberList mNumTurnaroundsInterface;
+    AnalyzerSettingInterfaceBool mOverrunDetectionInterface;
+    AnalyzerSettingInterfaceText mSelectRegisterInterface;
 };
 
 #endif // SWD_ANALYZER_SETTINGS_H
