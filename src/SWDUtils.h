@@ -29,24 +29,7 @@ inline std::string Int2Str( const U64 i )
     return Int2StrSal( i, Decimal, 64 );
 }
 
-// Function template to get the byte of any value
-template <typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true>
-constexpr U8 GetByteOf( const T value, const std::size_t byteNr )
-{
-    return ( value >> ( 8u * byteNr ) ) & 0xFFu;
-}
 
-// Function template for little endian serialization to U8 vector
-template <typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true>
-std::vector<U8> ToVectorU8( const T value )
-{
-    std::vector<U8> vector( sizeof( T ) );
-    for( std::size_t i = 0u; i < sizeof( T ); ++i )
-    {
-        vector[ i ] = GetByteOf( value, i );
-    }
-    return vector;
-}
 
 // Template function that generates a bitmask of length 'onecount'.
 // The generated bitmask has ones in the least significant 'onecount' bits.

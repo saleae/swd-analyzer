@@ -6,85 +6,6 @@
 #include "SWDAnalyzerSettings.h"
 #include "SWDUtils.h"
 
-// Sequence condition matrix
-const std::vector<SWDAnalyzer::SWDSequenceCondition> SWDAnalyzer::SEQUENCE_CONDITIONS = {
-    // protocol, allowed previous frames, is swdSequence compare method, swdSequence object
-    // 50,... - SWD line reset. At least 50 SWCLKTCK cycles with SWDIOTMS HIGH.
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD },
-      {},
-      &SWDParser::IsLineReset,
-      &SWDParser::GetLineReset,
-      &SWDParser::SetLineReset },
-    // 16 - JTAG-to-SWD select sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
-      { SwdFrameTypes::SWD_FT_LINE_RESET },
-      &SWDParser::IsJtagToSwd,
-      &SWDParser::GetJtagToSwd,
-      &SWDParser::SetJtagToSwd },
-    // 16 - SWD-to-JTAG select sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
-      { SwdFrameTypes::SWD_FT_LINE_RESET },
-      &SWDParser::IsSwdToJtag,
-      &SWDParser::GetSwdToJtag,
-      &SWDParser::SetSwdToJtag },
-    // 16 - SWD-to-DS select sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
-      { SwdFrameTypes::SWD_FT_LINE_RESET },
-      &SWDParser::IsSwdToDs,
-      &SWDParser::GetSwdToDs,
-      &SWDParser::SetSwdToDs },
-    // 31 - JTAG-to-DS select sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
-      { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_JTAG_TLR },
-      &SWDParser::IsJtagToDs,
-      &SWDParser::GetJtagToDs,
-      &SWDParser::SetJtagToDs },
-    // 12,46 - SWD read/write operation
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD },
-      { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_IDLE_CYCLE, SwdFrameTypes::SWD_FT_OPERATION,
-        SwdFrameTypes::SWD_FT_ERROR },
-      &SWDParser::IsOperation,
-      &SWDParser::GetOperation,
-      &SWDParser::SetOperation },
-    // 1,... - SWD idle cycles. SWCLKTCK cycles with SWDIOTMS LOW
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD },
-      { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_IDLE_CYCLE, SwdFrameTypes::SWD_FT_OPERATION },
-      &SWDParser::IsIdleCycles,
-      &SWDParser::GetIdleCycles,
-      &SWDParser::SetIdleCycles },
-    // 5,0 - Enters to JTAG Test-Logic-Reset state
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
-      {},
-      &SWDParser::IsJtagTlr,
-      &SWDParser::GetJtagTlr,
-      &SWDParser::SetJtagTlr },
-    // 8,... - Selection Alert preamble. At least 8 SWCLKTCK cycles with SWDIOTMS HIGH.
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
-      {},
-      &SWDParser::IsDsSelectionAlertPreamble,
-      &SWDParser::GetDsSelectionAlertPreamble,
-      &SWDParser::SetDsSelectionAlertPreamble },
-    // 128 - Selection Alert sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
-      {},
-      &SWDParser::IsDsSelectionAlert,
-      &SWDParser::GetDsSelectionAlert,
-      &SWDParser::SetDsSelectionAlert },
-    // 4 - Activation Code preamble. 4 SWCLKTCK cycles with SWDIOTMS LOW
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
-      { SwdFrameTypes::SWD_FT_DS_SEL_ALERT },
-      &SWDParser::IsDsActivationCodePreamble,
-      &SWDParser::GetDsActivationCodePreamble,
-      &SWDParser::SetDsActivationCodePreamble },
-    // 8,12 - Activation Code sequence
-    { { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
-      { SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE },
-      &SWDParser::IsDsActivationCode,
-      &SWDParser::GetDsActivationCode,
-      &SWDParser::SetDsActivationCode },
-};
-
-
 SWDAnalyzer::SWDAnalyzer() : Analyzer2(), mSWDIO(), mSWCLK(), mSimulationInitilized( false )
 {
     SetAnalyzerSettings( &mSettings );
@@ -126,48 +47,91 @@ void SWDAnalyzer::WorkerThread()
     mSWDParser.SetSelectRegister( mSettings.mSelectRegister );
 
     SWDErrorBits& errorBits = mSWDParser.GetErrorBits();
+    SwdFrameTypes previousFrameType = mSWDParser.GetLastFrameType();
+    DebugProtocol dProtocol = mSWDParser.GetCurrentProtocol();
+
     for( ;; )
     {
-        bool conditionMeet = false;
-        SwdFrameTypes lastFrame = mSWDParser.GetLastFrameType();
-        DebugProtocol dProtocol = mSWDParser.GetCurrentProtocol();
-
-        for( const SWDSequenceCondition& cond : SEQUENCE_CONDITIONS )
+        if( mSWDParser.IsBufferEmpty() || ( bestFixedLengthCmpResult == SeqCmpResult::SEQ_MATCH_PARTIALLY ) ||
+            ( bestVariableLengthCmpResult == SeqCmpResult::SEQ_MATCH_PARTIALLY ) || ( bestCompleteMatched <= bestPartialyMatched ) )
         {
-            if( cond.protocols.count( dProtocol ) != 0 )
+            // Get the next bit from the SWDIO channel
+            mSWDParser.AddBitToBuffer();
+        }
+
+        ClearBestMatchingResults();
+
+        for( auto wrappedSeqRef : mSWDParser.GetSequences() )
+        {
+            SWDBaseSequence& sequence = wrappedSeqRef.get();
+            if( sequence.IsDebugProtocolAllowed( dProtocol ) )
             {
-                if (cond.previousFrames.empty() || (std::find(cond.previousFrames.begin(), cond.previousFrames.end(), lastFrame) != cond.previousFrames.end()))
+                if( sequence.IsPreviousFrameTypeAllowed( previousFrameType ) )
                 {
-                    bool sequenceMached = std::invoke( cond.CompareFn, mSWDParser );
-                    if( sequenceMached )
+                    const SeqCmpResult sequenceMached = mSWDParser.Match( sequence );
+                    const bool fixedLengthSequence = sequence.IsFixedLengthSequence();
+                    if( fixedLengthSequence )
                     {
-                        conditionMeet = true;
-                        if( !errorBits.bits.empty() )
+                        bestFixedLengthCmpResult = BestMach( bestFixedLengthCmpResult, sequenceMached );
+                    }
+                    else
+                    {
+                        bestVariableLengthCmpResult = BestMach( bestVariableLengthCmpResult, sequenceMached );
+                        if( sequenceMached == SeqCmpResult::SEQ_MATCH_PARTIALLY )
+                        {
+                            const auto numberCheckedBits = sequence.GetNumberCheckedBits();
+                            if( numberCheckedBits > bestPartialyMatched )
+                            {
+                                bestPartialyMatched = numberCheckedBits;
+                            }
+                        }
+                        else if( sequenceMached == SeqCmpResult::SEQ_MATCH_COMPLETELY )
+                        {
+                            const auto numberCheckedBits = sequence.GetNumberCheckedBits();
+                            if( numberCheckedBits > bestCompleteMatched )
+                            {
+                                bestCompleteMatched = numberCheckedBits;
+                            }
+                        }
+                    }
+                    if( ( sequenceMached == SeqCmpResult::SEQ_MATCH_COMPLETELY ) &&
+                        ( fixedLengthSequence || ( ( bestFixedLengthCmpResult != SeqCmpResult::SEQ_MATCH_PARTIALLY ) &&
+                                                   ( bestCompleteMatched > bestPartialyMatched ) ) ) )
+                    {
+                        if( !errorBits.Empty() )
                         {
                             errorBits.SetProtocol( dProtocol );
+                            errorBits.UpdateBitInfo();
                             errorBits.AddFrames( mResults.get() );
                             mResults->CommitResults();
                             errorBits.Clear();
                         }
-                        SWDBaseSequnce& sequence = std::invoke( cond.GetSequence, mSWDParser );
+
+                        mSWDParser.CopyBits( sequence );
+
                         sequence.AddFrames( mResults.get() );
                         sequence.AddMarkers( mResults.get() );
-
                         mResults->CommitResults();
 
-                        std::invoke( cond.UpdateStatus, mSWDParser );
+                        sequence.UpdateAdiState();
+
+                        sequence.Clear();
+
+                        previousFrameType = mSWDParser.GetLastFrameType();
+                        dProtocol = mSWDParser.GetCurrentProtocol();
+                        ClearBestMatchingResults();
+
                         break;
                     }
                 }
             }
         }
-        if( !conditionMeet )
+        if( ( bestFixedLengthCmpResult == SeqCmpResult::SEQ_MISMATCH ) && ( bestVariableLengthCmpResult == SeqCmpResult::SEQ_MISMATCH ) )
         {
-            // This is neither a valid transaction nor a valid reset,
+            // This is neither a valid transaction nor a valid sequence,
             // so collect these bits and go forward.
-            mSWDParser.BufferBits( 1 ); // Make sure at least one bit is placed on the buffer
-            errorBits.bits.push_back( mSWDParser.PopFrontBit() );
-            mSWDParser.SetErrorBits();
+            errorBits.PushBackBit( mSWDParser.PopFrontBit() );
+            errorBits.UpdateAdiState();
         }
 
         ReportProgress( mSWDIO->GetSampleNumber() );
@@ -182,6 +146,14 @@ bool SWDAnalyzer::NeedsRerun()
 DPVersion SWDAnalyzer::GetDPVersion() const
 {
     return mSWDParser.GetDPVersion();
+}
+
+void SWDAnalyzer::ClearBestMatchingResults()
+{
+    bestFixedLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+	bestVariableLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+	bestPartialyMatched = 0u;
+	bestCompleteMatched = 0u;
 }
 
 U32 SWDAnalyzer::GenerateSimulationData( U64 minimumSampleIndex, U32 deviceSampleRate,

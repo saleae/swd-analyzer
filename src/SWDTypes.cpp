@@ -12,7 +12,7 @@
 
 // DP registers
 
-const std::map<U8, std::vector<SWDOperation::DPRegister>> SWDOperation::DP_REGISTERS = {
+const std::map<U8, std::vector<ADIState::DPRegister>> ADIState::DP_REGISTERS = {
     { 0x00u,
         {
             { {}, RegMask::REG_READ | RegMask::REG_V1 | RegMask::REG_V2 , SWDRegisters::SWDR_DP_DPIDR },
@@ -56,7 +56,12 @@ U8 operator|( const U8 a, const RegMask b )
     return ( a | static_cast<U8>( b ) );
 }
 
-const std::map<U8, SWDRegisters> SWDOperation::MEM_AP_ADI_V5 = {
+SeqCmpResult BestMach( const SeqCmpResult a, const SeqCmpResult b )
+{
+    return ( ( static_cast<U8>( a ) >= static_cast<U8>( b ) ) ? a : b );
+}
+
+const std::map<U8, SWDRegisters> ADIState::MEM_AP_ADI_V5 = {
     { 0x00u, SWDRegisters::SWDR_AP_CSW },
     { 0x04u, SWDRegisters::SWDR_AP_TAR },
     { 0x08u, SWDRegisters::SWDR_AP_TAR_MSW },
@@ -72,7 +77,7 @@ const std::map<U8, SWDRegisters> SWDOperation::MEM_AP_ADI_V5 = {
     { 0xFCu, SWDRegisters::SWDR_AP_IDR }
 };
 
-const std::map<U16, SWDRegisters> SWDOperation::MEM_AP_ADI_V6 = {
+const std::map<U16, SWDRegisters> ADIState::MEM_AP_ADI_V6 = {
     { 0x000u, SWDRegisters::SWDR_AP_DAR0 },
     { 0x004u, SWDRegisters::SWDR_AP_DAR1 },
     { 0x008u, SWDRegisters::SWDR_AP_DAR2 },
@@ -391,7 +396,8 @@ const std::map<SwdFrameTypes, std::string> SWDFrame::FRAME_NAMES =
     { SwdFrameTypes::SWD_FT_OPERATION, "SWD Transfer" }
 };
 
-const std::string SWDFrame::GetSwdFrameName( SwdFrameTypes frame )
+const std::string UNKNOWN_FRAME_STRING = "Unknown frame";  
+const std::string& SWDFrame::GetSwdFrameName( SwdFrameTypes frame )
 {
     auto search = FRAME_NAMES.find( frame );
     if( search != FRAME_NAMES.end() )
@@ -400,7 +406,7 @@ const std::string SWDFrame::GetSwdFrameName( SwdFrameTypes frame )
     }
     else
     {
-        return "Unknown frame";
+        return UNKNOWN_FRAME_STRING;
     }
 }
 
@@ -420,7 +426,8 @@ const std::map<SwdFrameTypes, std::string> SWDFrame::FRAMEV2_NAMES = {
     { SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE, "DS_ACTIVATION_CODE" }
 };
 
-const std::string SWDFrame::GetSwdFrameV2Name( SwdFrameTypes frame )
+const std::string UNKNOWN_FRAMEV2_STRING = "UNKNOWN";
+const std::string& SWDFrame::GetSwdFrameV2Name( SwdFrameTypes frame )
 {
     auto search = FRAMEV2_NAMES.find( frame );
     if( search != FRAMEV2_NAMES.end() )
@@ -429,9 +436,133 @@ const std::string SWDFrame::GetSwdFrameV2Name( SwdFrameTypes frame )
     }
     else
     {
-        return "UNKNOWN";
+        return UNKNOWN_FRAMEV2_STRING;
     }
 }
+
+bool operator==( const U8 a, const SWDAcks b )
+{
+    return ( a == static_cast<const U8>(b) );
+}
+
+bool operator!=(const U8 a, const SWDAcks b)
+{
+    return !( a == b );
+}
+
+const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> SWDOperation::OP_REQ_AND_ACK_SIZE = {
+    // DLCR.TURNROUND == 0 (1 cycle)
+    { 
+      { OpBitRange::OP_REQUEST_RANGE, OpItemSize::OP_REQUEST_SIZE  },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_1_TURNAROUND_SIZE },
+      { OpBitRange::OP_ACK_RANGE, OpItemSize::OP_ACK_SIZE }
+    },
+    // DLCR.TURNROUND == 1 (2 cycle)
+    { 
+      { OpBitRange::OP_REQUEST_RANGE, OpItemSize::OP_REQUEST_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_2_TURNAROUND_SIZE },
+      { OpBitRange::OP_ACK_RANGE, OpItemSize::OP_ACK_SIZE }
+    },
+    // DLCR.TURNROUND == 2 (3 cycle)
+    {
+      { OpBitRange::OP_REQUEST_RANGE, OpItemSize::OP_REQUEST_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_3_TURNAROUND_SIZE },
+      { OpBitRange::OP_ACK_RANGE, OpItemSize::OP_ACK_SIZE }
+    },
+    // DLCR.TURNROUND == 3 (4 cycle)
+    { 
+      { OpBitRange::OP_REQUEST_RANGE, OpItemSize::OP_REQUEST_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_4_TURNAROUND_SIZE },
+      { OpBitRange::OP_ACK_RANGE, OpItemSize::OP_ACK_SIZE } 
+    }
+};
+
+const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> SWDOperation::OP_RDATA_SIZE = {
+    // DLCR.TURNROUND == 0 (1 cycle)
+    { 
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_1_TURNAROUND_SIZE }
+    },
+    // DLCR.TURNROUND == 1 (2 cycle)
+    { 
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_2_TURNAROUND_SIZE }
+    },
+    // DLCR.TURNROUND == 2 (3 cycle)
+    {
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_3_TURNAROUND_SIZE }
+    },
+    // DLCR.TURNROUND == 3 (4 cycle)
+    {
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE },
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_4_TURNAROUND_SIZE }
+    }
+};
+
+const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> SWDOperation::OP_WDATA_SIZE = {
+    // DLCR.TURNROUND == 0 (1 cycle)
+    { 
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_1_TURNAROUND_SIZE },
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE }
+    },
+    // DLCR.TURNROUND == 1 (2 cycle)
+    {
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_2_TURNAROUND_SIZE },
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE }
+    },
+    // DLCR.TURNROUND == 2 (3 cycle)
+    {
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_3_TURNAROUND_SIZE },
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE }
+    },
+    // DLCR.TURNROUND == 3 (4 cycle)
+    {
+      { OpBitRange::OP_TURNAROUND_RANGE, OpItemSize::OP_4_TURNAROUND_SIZE },
+      { OpBitRange::OP_DATA_RANGE, OpItemSize::OP_DATA_SIZE },
+      { OpBitRange::OP_DATA_PARITY_RANGE, OpItemSize::OP_DATA_PARITY_SIZE }
+    }
+};
+
+const std::vector<U16> JTAG_TO_SWD_SEQUENCE = { 0xE79Eu };               // 0xE79E, transmitted LSB first
+const std::vector<U16> JTAG_TO_SWD_DEPRECATED_SEQUENCE = { 0xEDB6u };    // 0xEDB6, transmitted LSB first
+const std::vector<U16> SWD_TO_JTAG_SEQUENCE = { 0xE73Cu };               // 0xE73C, transmitted LSB first
+const std::vector<U16> SWD_TO_JTAG_DEPRECATED_SEQUENCE = { 0xAEAEu };    // 0xAEAE, transmitted LSB first
+const std::vector<U32> JTAG_TO_DS_SEQUENCE = { 0x33BBBBBAu };            // 0x33BBBBBA, 31 bits transmitted LSB first
+const std::vector<U16> SWD_TO_DS_SEQUENCE = { 0xE3BCu };                 // 0xE3BC, transmitted LSB first
+const std::vector<U64> DS_SELECTION_ALERT_SEQUENCE = { 0x86852D956209F392u, 0x19BC0EA2E3DDAFE9u }; // 0x86852D956209F392 0x19BC0EA2E3DDAFE9 transmitted LSB first
+const std::vector<U8> DS_ACTIVATION_CODE_PREAMBLE = { 0x00u };           // 0x00, 4 cycles with SWDIOTMS LOW
+const std::vector<U16> DS_ACTIVATION_CODE_JTAG_SERIAL = { 0x0000u };     // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
+const std::vector<U8> DS_ACTIVATION_CODE_SW_DP = { 0x1Au };              // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
+const std::vector<U8> DS_ACTIVATION_CODE_JTAG_DP = { 0x0Au };            // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
+
+UintSequence patternJtagToSwd( JTAG_TO_SWD_SEQUENCE );
+UintSequence patternJtagToSwdDeprecated( JTAG_TO_SWD_DEPRECATED_SEQUENCE );
+UintSequence patternSwdToJtag( SWD_TO_JTAG_SEQUENCE );
+UintSequence patternSwdToJtagDeprecated( SWD_TO_JTAG_DEPRECATED_SEQUENCE );
+UintSequence patternJtagToDs( JTAG_TO_DS_SEQUENCE, 31u );
+UintSequence patternSwdToDs( SWD_TO_DS_SEQUENCE );
+UintSequence patternDsSelectionAlert( DS_SELECTION_ALERT_SEQUENCE );
+UintSequence patternDsActivationCodePreamble( DS_ACTIVATION_CODE_PREAMBLE, 4u );
+UintSequence patternDsActivationCodeJtagSerial( DS_ACTIVATION_CODE_JTAG_SERIAL, 12u );
+UintSequence patternDsActivationCodeSwDp( DS_ACTIVATION_CODE_SW_DP );
+UintSequence patternDsActivationCodeJtagDp( DS_ACTIVATION_CODE_JTAG_DP );
+
+// SWD request byte of DP TARGETSEL write shifted to LSB zero bit position
+const std::vector<U8> opSwdReq_0x99 = { 0x99u >> 1u }; // 0b1001_1001 >> 1 = 0b0100_1100
+UintSequence patternSwdReq_0x99( opSwdReq_0x99, 8u - 1u );
+std::vector<std::reference_wrapper<UintSequence<U8>>> patternSwdReq = 
+{
+    patternSwdReq_0x99, // Line reset sequence without followed idele cycles but with followed by a DP TARGETSEL write
+};
+
 
 // ********************************************************************************
 
@@ -457,156 +588,263 @@ S64 SWDBit::GetEndSample() const
     return falling + GetMinStartEnd() - 1;
 }
 
-Frame SWDBit::MakeFrame() const
+// ********************************************************************************
+
+SWDRequestByte::SWDRequestByte( const U8 byteValue ) : byte( byteValue )
 {
-    Frame f;
-
-    f.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_BIT );
-    f.mFlags = 0;
-    f.mStartingSampleInclusive = GetStartSample();
-    f.mEndingSampleInclusive = GetEndSample();
-
-    f.mData1 = stateRising == BIT_HIGH ? 1 : 0;
-    f.mData2 = 0;
-
-    return f;
-}
-
-Frame SWDBit::MakeFrame( const S64 startingSampleInclusive, const S64 endingSampleInclusive, const U64 data1, const U64 data2, const U8 type, const U8 flags ) const
-{
-    Frame f;
-
-    f.mStartingSampleInclusive = startingSampleInclusive;
-    f.mEndingSampleInclusive = endingSampleInclusive;
-    f.mData1 = data1;
-    f.mData2 = data2;
-    f.mType = type;
-    f.mFlags = flags;
-
-    return f;
 }
 
 // ********************************************************************************
 
-SWDRequestByte::SWDRequestByte( const U8 byteValue )
+void SWDBaseSequence::Clear()
 {
-    byte = byteValue;
-}
-
-bool SWDRequestByte::IsByteValid() const
-{
-    // List of valid SWD request bytes
-    static std::set<U8> allowedValues = { 0x81u, 0x87u, 0x8Bu, 0x8Du, 0x93u, 0x95u, 0x99u, 0x9Fu,
-                                          0xA3u, 0xA5u, 0xA9u, 0xAFu, 0xB1u, 0xB7u, 0xBBu, 0xBDu };
-
-    return allowedValues.find( byte ) != allowedValues.end();
-}
-
-bool SWDRequestByte::GetAPnDP() const
-{
-    return ( byte & 0x02u ) != 0u;
-}
-
-bool SWDRequestByte::GetRnW() const
-{
-    return ( byte & 0x04u ) != 0u;
-}
-
-U8 SWDRequestByte::GetAddr() const
-{
-    return ( byte & 0x18u ) >> 1u;
-}
-
-// ********************************************************************************
-
-void SWDBaseSequnce::Clear()
-{
+    startSample = 0;
+    endSample = 0;
+    numberCheckedBits = 0u;
+    seqCheckResult = SeqCmpResult::SEQ_UNKNOWN;
     bits.clear();
 }
 
-void SWDBaseSequnce::AddFrames( SWDAnalyzerResults* pResults )
+void SWDBaseSequence::AddMarkers( SWDAnalyzerResults* pResults ) const
 {
 }
 
-void SWDBaseSequnce::AddMarkers( SWDAnalyzerResults* pResults ) const
+SWDBaseSequence::SWDBaseSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                                  const std::set<SwdFrameTypes>& previousFrames,
+                                ADIState& adiStateRef )
+    : seqFrameType( frameType ),
+      allowedDebugProtocols( debugProtocols ),
+      allowedPreviousFrames( previousFrames ),
+      bits(),
+      startSample( 0 ),
+      endSample( 0 ),
+      numberCheckedBits( 0u ),
+      seqCheckResult( SeqCmpResult::SEQ_UNKNOWN ),
+      adiState( adiStateRef )
 {
+}
+
+void SWDBaseSequence::UpdateBitInfo()
+{
+    startSample = bits.front().GetStartSample();
+    endSample = bits.back().GetEndSample();
+}
+
+bool SWDBaseSequence::BreakMatch( const std::deque<SWDBit>& bits )
+{
+    if( bits.empty() )
+    {
+        // Nothing to compare
+        seqCheckResult = SeqCmpResult::SEQ_UNKNOWN;
+        return true;
+    }
+    if( bits.front().GetStartSample() != startSample )
+    {
+        // New secuence detected
+        CaptureNewSequence( bits );
+    }
+    if( seqCheckResult == SeqCmpResult::SEQ_MATCH_COMPLETELY )
+    {
+        // The operation has been already checked but result has not been consumed yet
+        return true;
+    }
+    if( ( numberCheckedBits != 0u ) && ( seqCheckResult == SeqCmpResult::SEQ_MISMATCH ) )
+    {
+        // The previously checked bits did not match, so there is no point in comparing the next bits.
+        return true;
+    }
+    return false;
+}
+
+void SWDBaseSequence::CaptureNewSequence( const std::deque<SWDBit>& bits )
+{
+    Clear(); // Clear the bits
+    startSample = bits.front().GetStartSample();
+}
+
+void SWDBaseSequence::AddFrame( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive, const S64 endingSampleInclusive,
+                                const U64 data1, const U64 data2, const SwdFrameTypes type, const U8 flags ) const
+{
+    Frame frame;
+    frame.mStartingSampleInclusive = startingSampleInclusive;
+    frame.mEndingSampleInclusive = endingSampleInclusive;
+    frame.mData1 = data1;
+    frame.mData2 = data2;
+    frame.mType = static_cast<U8>( type );
+    frame.mFlags = flags;
+    pResults->AddFrame( frame );
+}
+
+void SWDBaseSequence::AddFrameV2SimpleSequence( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive,
+                                                const S64 endingSampleInclusive, const SwdFrameTypes frameType,
+                                                const std::size_t bitCount ) const
+{
+    FrameV2 frameV2;
+    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( frameType ).c_str() );
+    frameV2.AddInteger( "cycles", bitCount );
+    pResults->AddFrameV2( frameV2, "sequence", startingSampleInclusive, endingSampleInclusive );
+}
+
+void SWDBaseSequence::AddFrameV2DataSequence( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive,
+                                              const S64 endingSampleInclusive, const SwdFrameTypes frameType, const std::size_t bitCount,
+                                              const std::vector<U8>& bytes ) const
+{
+    FrameV2 frameV2;
+	frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( frameType ).c_str() );
+	frameV2.AddInteger( "cycles", bitCount );
+    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
+	pResults->AddFrameV2( frameV2, "sequence", startingSampleInclusive, endingSampleInclusive );
+}
+
+const std::size_t SWDBaseSequence::GetNumberCheckedBits() const
+{
+    return numberCheckedBits;
+}
+
+const bool SWDBaseSequence::Empty() const
+{
+    return bits.empty();
+}
+
+const bool SWDBaseSequence::IsDebugProtocolAllowed( DebugProtocol protocol ) const
+{
+    return ( allowedDebugProtocols.find( protocol ) != allowedDebugProtocols.end() );
+}
+
+const bool SWDBaseSequence::IsPreviousFrameTypeAllowed( SwdFrameTypes frameType ) const
+{
+    return ( allowedPreviousFrames.empty() || ( allowedPreviousFrames.find( frameType ) != allowedPreviousFrames.end() ) );
+}
+
+void SWDBaseSequence::UpdateAdiState()
+{
+    adiState.SetLastFrameType( seqFrameType );
+}
+
+SWDFixedLengthSequence::SWDFixedLengthSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                                                const std::set<SwdFrameTypes>& previousFrames,
+                                              ADIState& adiStateRef )
+    : SWDBaseSequence( frameType, debugProtocols, previousFrames, adiStateRef )
+{
+}
+
+SWDVariableLengthSequence::SWDVariableLengthSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                                                      const std::set<SwdFrameTypes>& previousFrames,
+                                                    ADIState& adiStateRef )
+    : SWDBaseSequence( frameType, debugProtocols, previousFrames, adiStateRef ), bitCount( 0u )
+{
+}
+
+void SWDVariableLengthSequence::UpdateBitInfo()
+{
+    SWDBaseSequence::UpdateBitInfo();
+    bitCount = bits.size();
 }
 
 // ********************************************************************************
+
+SWDOperation::SWDOperation( ADIState& adiStateRef )
+    : SWDFixedLengthSequence( SwdFrameTypes::SWD_FT_OPERATION, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD },
+                             { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_IDLE_CYCLE, SwdFrameTypes::SWD_FT_OPERATION,
+                               SwdFrameTypes::SWD_FT_ERROR }, 
+                             adiStateRef ),
+      reqAPnDP( false ),
+      reqRnW( false ),
+      reqA23Addr( 0u ),
+      reqParity( 0u ),
+      reqByte( 0u ),
+      reqAck( 0u ),
+      data( 0 ),
+      calculatedDataParity( 0u ),
+      dataParity( 0u ),
+      dataParityOk( false ),
+      opReqAndAckItemSize( &( OP_REQ_AND_ACK_SIZE.front() ) ),
+      opRdataItemSize( &( OP_RDATA_SIZE.front() ) ),
+      opWdataItemSize( &( OP_WDATA_SIZE.front() ) ),
+      opAckOffset( 0u ),
+      opDataOffset( 0u ),
+      opReqAndAckSize( 0u )
+{
+}
 
 void SWDOperation::Clear()
 {
-    reqRnW = reqAPnDP = parityRead = dataParityOk = false;
-    addr = parityRead = requestByte = reqAck = dataParity = data = 0;
-    reg = SWDRegisters::SWDR_UNDEFINED;
-
-    bits.clear();
+    SWDBaseSequence::Clear();
+    reqRnW = false;
+    reqAPnDP = false;
+    dataParityOk = false;
+    reqA23Addr = 0u;
+    reqParity = 0u;
+    reqByte = 0u;
+    reqAck =0u;
+    adiState.SetIgnoreAck( adiState.GetOverrunDetection() );
+    calculatedDataParity = 0u;
+    dataParity = 0u;
+    data = 0;
+    adiState.SetRegister( SWDRegisters::SWDR_UNDEFINED );
 }
 
 void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
 {
-    Frame frame;
-
-    const size_t trnNr = GetTurnaroundNumber();
-    assert( bits.size() >= 8u + trnNr + 3u );
+    const std::size_t trnNr = adiState.GetTurnaroundNumber();
+    assert( bits.size() >=
+            static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) + trnNr + static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE) );
 
     // request
     std::deque<SWDBit>::const_iterator bi( bits.begin() );
-    const S64 opStartSample = bi[ 0u ].GetStartSample();
-    S64 endSample = bi[ 7u ].GetEndSample();
-    frame = bi->MakeFrame( opStartSample, endSample, requestByte, static_cast<U64>( reg ), static_cast<U8>( SwdFrameTypes::SWD_FT_REQUEST ),
-                           ( IsRead() ? static_cast<U8>( SWDRequestFrame::RQ_FLAG::IS_READ ) : 0u ) |
-                               ( reqAPnDP ? static_cast<U8>( SWDRequestFrame::RQ_FLAG::IS_ACCESS_PORT ) : 0u ) );
-    pResults->AddFrame( frame );
-    bi += 8u;
+    auto frameEndSample = bi[ static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) - 1u ].GetEndSample();
+    const SWDRegisters reg = adiState.GetRegister();
+    AddFrame( pResults, startSample, frameEndSample, reqByte, static_cast<U64>( reg ), SwdFrameTypes::SWD_FT_REQUEST,
+                 static_cast<U8>( reqRnW ? SWDRequestFrame::RQ_FLAG::IS_READ : SWDRequestFrame::RQ_FLAG::IS_NONE ) |
+                     static_cast<U8>( reqAPnDP ? SWDRequestFrame::RQ_FLAG::IS_ACCESS_PORT : SWDRequestFrame::RQ_FLAG::IS_NONE ) );
+    bi += static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE );
 
     // turnaround
-    S64 startSample = bi[ 0u ].GetStartSample();
-    endSample = bi[ trnNr - 1u ].GetEndSample();
-    frame =
-        bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
-    pResults->AddFrame( frame );
+    auto frameStartSample = bi[ 0u ].GetStartSample();
+    frameEndSample = bi[ trnNr - 1u ].GetEndSample();
+    AddFrame( pResults, frameStartSample, frameEndSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, SwdFrameTypes::SWD_FT_TURNAROUND, 0u );
     bi += trnNr;
 
     // ack
-    startSample = bi[ 0u ].GetStartSample();
-    endSample = bi[ 2u ].GetEndSample();
-    frame = bi->MakeFrame( startSample, endSample, reqAck, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_ACK ), 0u );
-    pResults->AddFrame( frame );
-    bi += 3u;
+    frameStartSample = bi[ 0u ].GetStartSample();
+    frameEndSample = bi[ static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE ) - 1u ].GetEndSample();
+    AddFrame( pResults, frameStartSample, frameEndSample, reqAck, 0u, SwdFrameTypes::SWD_FT_ACK, 0u );
+    bi += static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE );
 
     // turnaround if ACK is WAIT or FAULT or OK with write operation
-    if( ( reqAck == static_cast<U8>( SWDAcks::ACK_WAIT ) ) ||
-        ( reqAck == static_cast<U8>( SWDAcks::ACK_FAULT ) ) ||
-        ( ( reqAck == static_cast<U8>( SWDAcks::ACK_OK ) ) && !IsRead() ) )
+    if( ( reqAck == SWDAcks::ACK_WAIT ) || ( reqAck == SWDAcks::ACK_FAULT ) || ( ( reqAck == SWDAcks::ACK_OK ) && ( !reqRnW ) ) )
     {
-        startSample = bi[ 0u ].GetStartSample();
-        endSample = bi[ trnNr - 1u ].GetEndSample();
-        frame = bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
-        pResults->AddFrame( frame );
+        frameStartSample = bi[ 0u ].GetStartSample();
+        frameEndSample = bi[ trnNr - 1u ].GetEndSample();
+        AddFrame( pResults, frameStartSample, frameEndSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, SwdFrameTypes::SWD_FT_TURNAROUND, 0u );
         bi += trnNr;
     }
-    if( bits.size() < 8u + trnNr + 3u + 32u + 1u + trnNr )
+
+    // Prepare FrameV2 data.
+    FrameV2 frameV2;
+    frameV2.AddBoolean( "RnW", reqRnW );
+    frameV2.AddBoolean( "APnDP", reqAPnDP );
+    frameV2.AddString( "reg", GetRegisterName( reg ).c_str() );
+    frameV2.AddByte( "ack", reqAck );
+
+    if( bits.size() < static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) + trnNr +
+                          static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE ) + static_cast<std::size_t>( OpItemSize::OP_DATA_SIZE ) +
+                          static_cast<std::size_t>( OpItemSize::OP_DATA_PARITY_SIZE ) + trnNr )
     {
-        FrameV2 frameV2;
-        frameV2.AddBoolean( "RnW", IsRead() );
-        frameV2.AddBoolean( "APnDP", reqAPnDP );
-        frameV2.AddString( "reg", GetRegisterName( reg ).c_str() );
-        frameV2.AddByte( "ack", reqAck );
-        pResults->AddFrameV2( frameV2, "transfer", opStartSample, endSample );
+        pResults->AddFrameV2( frameV2, "transfer", startSample, endSample );
         return;
     }
 
     // data
-    startSample = bi[ 0u ].GetStartSample();
-    endSample = bi[ 31u ].GetEndSample();
+    frameStartSample = bi[ 0u ].GetStartSample();
+    frameEndSample = bi[ static_cast<std::size_t>( OpItemSize::OP_DATA_SIZE ) - 1u ].GetEndSample();
     SWDRegistersUnion swdRegCouple{}; // Couple of previous and current SWD register
-    if( IsRead() )
+    if( reqRnW )
     {
-        if( IsAp() )
+        if( reqAPnDP )
         {
             // AP read
-            if( numApReads == 0 )
+            if( adiState.GetNumApReads() == 0u )
             {
                 // On the first AP read access, the read data that is returned is unknown. The debugger must discard this result.
                 swdRegCouple.reg.prev = SWDRegisters::SWDR_UNDEFINED;
@@ -615,22 +853,22 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
             else
             {
                 // The next AP read access, if successful, returns the result of the previous AP read.
-                swdRegCouple.reg.prev = lastRegister;
+                swdRegCouple.reg.prev = adiState.GetLastReadRegister();
                 swdRegCouple.reg.current = reg;
-                swdRegCouple.reg.memAddr = tar;
+                swdRegCouple.reg.memAddr = adiState.GetTar();
             }
-            numApReads++;
+            adiState.IncrementNumApReads();
         }
         else
         {
             // DP read
-            if( ( numApReads != 0 ) && ( reg == SWDRegisters::SWDR_DP_RDBUFF ) )
+            if( ( adiState.GetNumApReads() != 0 ) && ( reg == SWDRegisters::SWDR_DP_RDBUFF ) )
             {
                 // The debugger can then read the DP RDBUFF register to obtain the last AP read result.
-                swdRegCouple.reg.prev = lastRegister;
+                swdRegCouple.reg.prev = adiState.GetLastReadRegister();
                 swdRegCouple.reg.current = reg;
-                swdRegCouple.reg.memAddr = tar;
-                numApReads = 0;
+                swdRegCouple.reg.memAddr = adiState.GetTar();
+                adiState.ClearNumApReads();
             }
             else
             {
@@ -643,43 +881,36 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
     {
         swdRegCouple.reg.prev = SWDRegisters::SWDR_UNDEFINED;
         swdRegCouple.reg.current = reg;
-        swdRegCouple.reg.memAddr = tar;
-        numApReads = 0;
+        swdRegCouple.reg.memAddr = adiState.GetTar();
+        adiState.ClearNumApReads();
     }
-    frame = bi->MakeFrame( startSample, endSample, data, swdRegCouple.blob, IsRead() ? static_cast<U8>( SwdFrameTypes::SWD_FT_RDATA ) : static_cast<U8>( SwdFrameTypes::SWD_FT_WDATA ), 0u );
-    pResults->AddFrame( frame );
-    bi += 32u;
+    AddFrame( pResults, frameStartSample, frameEndSample, data, swdRegCouple.blob,
+                 reqRnW ? SwdFrameTypes::SWD_FT_RDATA : SwdFrameTypes::SWD_FT_WDATA, 0u );
+    bi += static_cast<std::size_t>( OpItemSize::OP_DATA_SIZE );
 
     // data parity
-    startSample = bi[ 0u ].GetStartSample();
-    endSample = bi[ 0u ].GetEndSample();
-    frame = bi->MakeFrame( startSample, endSample, dataParity, dataParityOk ? 1u : 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_DATA_PARITY ), 0u );
-    pResults->AddFrame( frame );
-    bi += 1u;
+    frameStartSample = bi[ 0u ].GetStartSample();
+    frameEndSample = bi[ static_cast<std::size_t>( OpItemSize::OP_DATA_PARITY_SIZE ) - 1u ].GetEndSample();
+    AddFrame( pResults, frameStartSample, frameEndSample, dataParity, dataParityOk ? 1u : 0u, SwdFrameTypes::SWD_FT_DATA_PARITY, 0u );
+    bi += static_cast<std::size_t>( OpItemSize::OP_DATA_PARITY_SIZE );
 
-    if( IsRead() )
+    if( reqRnW )
     {
         // add turnaround on read operation
-        startSample = bi[ 0u ].GetStartSample();
-        endSample = bi[ trnNr - 1u ].GetEndSample();
-        frame = bi->MakeFrame( startSample, endSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, static_cast<U8>( SwdFrameTypes::SWD_FT_TURNAROUND ), 0u );
-        pResults->AddFrame( frame );
+        frameStartSample = bi[ 0u ].GetStartSample();
+        frameEndSample = bi[ trnNr - 1u ].GetEndSample();
+        AddFrame( pResults, frameStartSample, frameEndSample, bi[ 0u ].IsHigh() ? 1u : 0u, 0u, SwdFrameTypes::SWD_FT_TURNAROUND, 0u );
     }
 
     // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddBoolean( "RnW", IsRead() );
-    frameV2.AddBoolean( "APnDP", IsAp() );
-    frameV2.AddString( "reg", GetRegisterName( reg ).c_str() );
-    frameV2.AddByte( "ack", reqAck );
     std::vector<U8> bytes = ToVectorU8( data );
     frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
     // Add an effective AP register that refers to data
     SWDRegisters effectiveApReg = SWDRegisters::SWDR_UNDEFINED; 
-    if( IsRead() )
+    if( reqRnW )
     {
         // Read operation
-        if( IsAp() )
+        if( reqAPnDP )
         {
             if( swdRegCouple.reg.current != SWDRegisters::SWDR_UNDEFINED )
             {
@@ -697,7 +928,7 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
     else
     {
         // Write operation
-        if( IsAp() )
+        if( reqAPnDP )
         {
             effectiveApReg = swdRegCouple.reg.current;
         }
@@ -712,20 +943,20 @@ void SWDOperation::AddFrames( SWDAnalyzerResults* pResults )
             frameV2.AddByteArray( "memaddr", memAddrBytes.data(), memAddrBytes.size() );
         }
     }
-    pResults->AddFrameV2( frameV2, "transfer", opStartSample, endSample );
+    pResults->AddFrameV2( frameV2, "transfer", startSample, endSample );
 }
 
 void SWDOperation::AddMarkers( SWDAnalyzerResults* pResults ) const
 {
-    const size_t trnNr = GetTurnaroundNumber();
+    const size_t trnNr = adiState.GetTurnaroundNumber();
     for( std::deque<SWDBit>::const_iterator bi( bits.begin() ); bi != bits.end(); ++bi )
     {
         size_t ndx = bi - bits.begin();
 
         // turnaround
         if( ( ( ndx >= 8u ) && ( ndx < 8u + trnNr ) ) ||
-            ( !IsRead() && ( ( ndx >= 8u + trnNr + 3u ) && ( ndx < 8u + trnNr + 3u + trnNr ) ) ) ||
-            ( IsRead() && ( ( ndx >= 8u + trnNr + 3u + 32u + 1u ) && ( ndx < 8u + trnNr + 3u + 32u + 1u + trnNr ) ) )
+            ( (!reqRnW) && ( ( ndx >= 8u + trnNr + 3u ) && ( ndx < 8u + trnNr + 3u + trnNr ) ) ) ||
+            ( reqRnW && ( ( ndx >= 8u + trnNr + 3u + 32u + 1u ) && ( ndx < 8u + trnNr + 3u + 32u + 1u + trnNr ) ) )
         )
         {
             pResults->AddMarker( ( bi->falling + bi->rising ) / 2, AnalyzerResults::X, pResults->GetSettings()->mSWCLK );
@@ -739,46 +970,34 @@ void SWDOperation::AddMarkers( SWDAnalyzerResults* pResults ) const
     }
 }
 
-void SWDOperation::SetDPVer( DPVersion version )
+void ADIState::DetermineRegister( bool reqAPnDP, bool reqRnW, U8 reqA23Addr )
 {
-    dpVer = version;
-}
-
-void SWDOperation::SetRegister( U32 selectReg )
-{
-
+//    SWDRegisters reg;
     if( reqAPnDP ) // AccessPort or DebugPort?
     {
-        reg = SWDRegisters::SWDR_AP_RAZ_WI;
-        if( dpVer < DPVersion::DP_V3 )
+        // MEM-AP Registers
+        if (mDPVersion < DPVersion::DP_V3)
         {
             // MEM-AP ADIv5
-            U8 apBankSel = static_cast<U8>( selectReg & 0xF0u );
-            U8 apRegOffset = apBankSel | addr;
-            const auto apReg = MEM_AP_ADI_V5.find( apRegOffset );
-            if( apReg != MEM_AP_ADI_V5.end() )
-            {
-                reg = apReg->second;
-            }
+            const U8 apRegOffset = static_cast<U8>((mSelect & 0xF0u) | reqA23Addr);
+            const auto apReg = MEM_AP_ADI_V5.find(apRegOffset);
+            mRegister = (apReg != MEM_AP_ADI_V5.end()) ? apReg->second : SWDRegisters::SWDR_AP_RAZ_WI;
         }
         else
         {
             // MEM-AP ADIv6
-            U16 apRegOffset = static_cast<U16>( selectReg & 0xFF0u );
-            apRegOffset |= addr;
-            const auto apReg = MEM_AP_ADI_V6.find( apRegOffset );
-            if( apReg != MEM_AP_ADI_V6.end() )
-            {
-                reg = apReg->second;
-            }
+            const U16 apRegOffset = static_cast<U16>((mSelect & 0xFF0u) | reqA23Addr);
+            const auto apReg = MEM_AP_ADI_V6.find(apRegOffset);
+            mRegister = (apReg != MEM_AP_ADI_V6.end()) ? apReg->second : SWDRegisters::SWDR_AP_RAZ_WI;
         }
     }
     else
     {
-        reg = SWDRegisters::SWDR_UNDEFINED;
-        U8 dpBankSel = static_cast<U8>(selectReg & 0x0Fu);
+        // DP Registers
+        mRegister = SWDRegisters::SWDR_UNDEFINED;
+        const U8 dpBankSel = static_cast<U8>( mSelect & 0x0Fu );
 
-        const auto dpReg = DP_REGISTERS.find( addr );
+        const auto dpReg = DP_REGISTERS.find( reqA23Addr );
         if( dpReg != DP_REGISTERS.end() )
         {
             for( const auto& dpRegRecord : dpReg->second )
@@ -788,12 +1007,12 @@ void SWDOperation::SetRegister( U32 selectReg )
                     if( ( reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_READ ) ) != 0u ) ) ||
                         ( !reqRnW && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_WRITE ) ) != 0u ) ) )
                     {
-                        if( ( dpVer == DPVersion::DP_V0 ) ||
-                            ( ( dpVer == DPVersion::DP_V1 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V1 ) ) != 0u ) ) ||
-                            ( ( dpVer == DPVersion::DP_V2 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V2 ) ) != 0u ) ) ||
-                            ( ( dpVer == DPVersion::DP_V3 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V3 ) ) != 0u ) ) )
+                        if( ( mDPVersion == DPVersion::DP_V0 ) ||
+                            ( ( mDPVersion == DPVersion::DP_V1 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V1 ) ) != 0u ) ) ||
+                            ( ( mDPVersion == DPVersion::DP_V2 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V2 ) ) != 0u ) ) ||
+                            ( ( mDPVersion == DPVersion::DP_V3 ) && ( ( dpRegRecord.Access & static_cast<U8>( RegMask::REG_V3 ) ) != 0u ) ) )
                         {
-                            reg = dpRegRecord.Register;
+                            mRegister = dpRegRecord.Register;
                             break;
                         }
                     }
@@ -803,214 +1022,157 @@ void SWDOperation::SetRegister( U32 selectReg )
     }
 }
 
-bool SWDOperation::IsRead() const
-{
-    return reqRnW;
-}
-
-bool SWDOperation::IsAp() const
-{
-    return reqAPnDP;
-}
-
-void SWDOperation::SetTurnaroundNumber( U8 num )
-{
-    turnaround = num;
-}
-
-size_t SWDOperation::GetTurnaroundNumber() const
-{
-    return turnaround;
-}
-
-void SWDOperation::SetOrunDetect( bool enable )
-{
-    orundetect = enable;
-}
-
-void SWDOperation::SetAddrInc( U8 num )
+void ADIState::SetAddrInc( U8 num )
 {
     switch( num )
     {
         case static_cast<U8>(CswAddrInc::CSW_ADDRINC_DISABLED):
-            addrInc = CswAddrInc::CSW_ADDRINC_DISABLED;
+            mCswAddrInc = CswAddrInc::CSW_ADDRINC_DISABLED;
             break;
         case static_cast<U8>( CswAddrInc::CSW_ADDRINC_SINGLE ):
-            addrInc = CswAddrInc::CSW_ADDRINC_SINGLE;
+            mCswAddrInc = CswAddrInc::CSW_ADDRINC_SINGLE;
             break;
         case static_cast<U8>( CswAddrInc::CSW_ADDRINC_PACKED ):
-            addrInc = CswAddrInc::CSW_ADDRINC_PACKED;
+            mCswAddrInc = CswAddrInc::CSW_ADDRINC_PACKED;
             break;
         default:
-            addrInc = CswAddrInc::CSW_ADDRINC_RESERVED;
+            mCswAddrInc = CswAddrInc::CSW_ADDRINC_RESERVED;
             break;
     }
 }
 
-void SWDOperation::SetDataSize( U8 num )
+void ADIState::SetDataSize( U8 num )
 {
     switch( num )
     {
         case static_cast<U8>( CswSize::CSW_SIZE_8_BIT ):
-            dataSize = CswSize::CSW_SIZE_8_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_8_BIT;
             break;
         case static_cast<U8>( CswSize::CSW_SIZE_16_BIT ):
-            dataSize = CswSize::CSW_SIZE_16_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_16_BIT;
             break;
         case static_cast<U8>( CswSize::CSW_SIZE_32_BIT ):
-            dataSize = CswSize::CSW_SIZE_32_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_32_BIT;
             break;
         case static_cast<U8>( CswSize::CSW_SIZE_64_BIT ):
-            dataSize = CswSize::CSW_SIZE_64_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_64_BIT;
             break;
         case static_cast<U8>( CswSize::CSW_SIZE_128_BIT ):
-            dataSize = CswSize::CSW_SIZE_128_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_128_BIT;
             break;
         case static_cast<U8>( CswSize::CSW_SIZE_256_BIT ):
-            dataSize = CswSize::CSW_SIZE_256_BIT;
+            mCswDataSize = CswSize::CSW_SIZE_256_BIT;
             break;
         default:
-            dataSize = CswSize::CSW_SIZE_RESERVED;
+            mCswDataSize = CswSize::CSW_SIZE_RESERVED;
             break;
     }
 }
 
-bool SWDOperation::GetOrunDetect() const
+void ADIState::IncrementTar()
 {
-    return orundetect;
+    if( mCswAddrInc == CswAddrInc::CSW_ADDRINC_SINGLE )
+    {
+        mTar += ( 1u << static_cast<U8>( mCswDataSize ) );
+    }
+    else if( mCswAddrInc == CswAddrInc::CSW_ADDRINC_PACKED )
+    {
+        mTar += 4u;
+    }
 }
 
-void SWDOperation::IncrementTar()
+void ADIState::SetSelect( U32 select )
 {
-    if( addrInc == CswAddrInc::CSW_ADDRINC_SINGLE )
-    {
-        tar += ( 1u << static_cast<U8>( dataSize ));
-    }
-    else if( addrInc == CswAddrInc::CSW_ADDRINC_PACKED )
-    {
-        tar += 4u;
-    }
+	mSelect = select;
+}
+
+U32 ADIState::GetSelect() const
+{
+    return mSelect;
+}
+
+void ADIState::SetCurrentProtocol( DebugProtocol protocol )
+{
+	mCurrentProtocol = protocol;
+}
+
+DebugProtocol ADIState::GetCurrentProtocol() const
+{
+    return mCurrentProtocol;
+}
+
+void ADIState::SetLastFrameType( SwdFrameTypes frameType )
+{
+	mLastFrameType = frameType;
+}
+
+SwdFrameTypes ADIState::GetLastFrameType() const
+{
+    return mLastFrameType;
 }
 
 
 // ********************************************************************************
+
+SWDLineReset::SWDLineReset( ADIState& adiStateRef )
+    : SWDVariableLengthSequence( SwdFrameTypes::SWD_FT_LINE_RESET, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD }, {},
+                                 adiStateRef ),
+      firstLowBitOffset( 0u )
+{
+}
+
+void SWDLineReset::Clear()
+{
+    SWDBaseSequence::Clear();
+    firstLowBitOffset = 0u;
+}
 
 void SWDLineReset::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_LINE_RESET );
-    frame.mData1 = bitCount;
-    pResults->AddFrame( frame );
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_LINE_RESET ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, seqFrameType, bitCount );
 }
 
 // ********************************************************************************
 
-void JTAGToSWD::Clear()
+JTAGToSWD::JTAGToSWD( ADIState& adiStateRef )
+    : SwitchSequenceWithDeprecate( SwdFrameTypes::SWD_FT_JTAG_TO_SWD, adiStateRef, patternJtagToSwd, patternJtagToSwdDeprecated )
 {
-    deprecated = false;
-    data = 0;
-    bits.clear();
-}
-
-void JTAGToSWD::AddFrames( SWDAnalyzerResults* pResults )
-{
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
-    // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_SWD );
-    frame.mData1 = data;
-    frame.mFlags = deprecated ? 1u : 0u;
-    pResults->AddFrame( frame );
-
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TO_SWD ).c_str() );
-    frameV2.AddInteger( "cycles", sizeof(data) * 8u );
-    std::vector<U8> bytes = ToVectorU8( data );
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
 
-void SWDToJTAG::Clear()
+SWDToJTAG::SWDToJTAG( ADIState& adiStateRef )
+    : SwitchSequenceWithDeprecate( SwdFrameTypes::SWD_FT_SWD_TO_JTAG, adiStateRef, patternSwdToJtag, patternSwdToJtagDeprecated )
 {
-    deprecated = false;
-    data = 0;
-    bits.clear();
-}
-
-void SWDToJTAG::AddFrames( SWDAnalyzerResults* pResults )
-{
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
-    // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_JTAG );
-    frame.mData1 = data;
-    frame.mFlags = deprecated ? 1 : 0;
-    pResults->AddFrame( frame );
-
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_SWD_TO_JTAG ).c_str() );
-    frameV2.AddInteger( "cycles", sizeof( data ) * 8u );
-    std::vector<U8> bytes = ToVectorU8( data );
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
+
+SWDErrorBits::SWDErrorBits( ADIState& adiStateRef )
+    : SWDVariableLengthSequence( SwdFrameTypes::SWD_FT_ERROR, {}, {}, adiStateRef ), protocol( DebugProtocol::DPROTOCOL_UNKNOWN )
+{
+}
 
 void SWDErrorBits::Clear()
 {
+    SWDBaseSequence::Clear();
     protocol = DebugProtocol::DPROTOCOL_UNKNOWN;
-    bits.clear();
 }
 
 void SWDErrorBits::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
+    // Legacy Frame
     SwdFrameTypes frameType = ( ( protocol == DebugProtocol::DPROTOCOL_UNKNOWN ) || ( protocol == DebugProtocol::DPROTOCOL_SWD ) )
                                   ? SwdFrameTypes::SWD_FT_ERROR
                                   : SwdFrameTypes::SWD_FT_IGNORED;
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, frameType, 0u );
 
-    // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( frameType );
-    frame.mData1 = bitCount;
-    frame.mData2 = static_cast<U64>( protocol );
-    pResults->AddFrame( frame );
-
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( frameType ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, frameType, bitCount );
 }
 
 void SWDErrorBits::SetProtocol( const DebugProtocol newProtocol )
@@ -1018,219 +1180,140 @@ void SWDErrorBits::SetProtocol( const DebugProtocol newProtocol )
     protocol = newProtocol;
 }
 
+void SWDErrorBits::PushBackBit( SWDBit&& bit )
+{
+	bits.push_back( std::move( bit ) );
+}
+
 // ********************************************************************************
+
+SWDIdleCycles::SWDIdleCycles( ADIState& adiStateRef )
+    : PlainBitSequence( SwdFrameTypes::SWD_FT_IDLE_CYCLE, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD },
+                        { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_OPERATION, SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE }, adiStateRef, false, 1u )
+{
+}
 
 void SWDIdleCycles::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_IDLE_CYCLE );
-    frame.mData1 = bitCount;
-    pResults->AddFrame( frame );
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_IDLE_CYCLE ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, seqFrameType, bitCount );
 }
 
 // ********************************************************************************
+
+JTAGTlr::JTAGTlr( ADIState& adiStateRef )
+    : PlainBitSequence( SwdFrameTypes::SWD_FT_JTAG_TLR,
+                        { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_JTAG, DebugProtocol::DPROTOCOL_SWD }, {}, adiStateRef,
+                        true, 5u )
+{
+}
 
 void JTAGTlr::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TLR );
-    frame.mData1 = bitCount;
-    pResults->AddFrame( frame );
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TLR ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, seqFrameType, bitCount );
 }
 
 // ********************************************************************************
 
-void JTAGToDS::Clear()
+JTAGToDS::JTAGToDS( ADIState& adiStateRef )
+    : SwitchSequence( SwdFrameTypes::SWD_FT_JTAG_TO_DS,
+                      { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
+                      { SwdFrameTypes::SWD_FT_LINE_RESET, SwdFrameTypes::SWD_FT_JTAG_TLR }, adiStateRef, patternJtagToDs )
 {
-    data = 0;
-    bits.clear();
-}
-
-void JTAGToDS::AddFrames( SWDAnalyzerResults* pResults )
-{
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
-    // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_JTAG_TO_DS );
-    frame.mData1 = data;
-    pResults->AddFrame( frame );
-
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_JTAG_TO_DS ).c_str() );
-    frameV2.AddInteger( "cycles", 31u );
-    std::vector<U8> bytes = ToVectorU8( data );
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
 
-void SWDToDS::Clear()
+SWDToDS::SWDToDS( ADIState& adiStateRef )
+    : SwitchSequence( SwdFrameTypes::SWD_FT_SWD_TO_DS,
+                      { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
+                      { SwdFrameTypes::SWD_FT_LINE_RESET }, adiStateRef, patternSwdToDs )
 {
-    data = 0;
-    bits.clear();
-}
-
-void SWDToDS::AddFrames( SWDAnalyzerResults* pResults )
-{
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
-    // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_SWD_TO_DS );
-    frame.mData1 = data;
-    pResults->AddFrame( frame );
-
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_SWD_TO_DS ).c_str() );
-    frameV2.AddInteger( "cycles", 16u );
-    std::vector<U8> bytes = ToVectorU8( data );
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
 }
 
 // ********************************************************************************
+
+DSSelectionAlertPreamble::DSSelectionAlertPreamble( ADIState& adiStateRef )
+    : PlainBitSequence( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
+                        {}, adiStateRef, true, 8u )
+{
+}
 
 void DSSelectionAlertPreamble::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE );
-    frame.mData1 = bitCount;
-    pResults->AddFrame( frame );
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, seqFrameType, bitCount );
 }
 
 // ********************************************************************************
 
-void DSSelectionAlert::Clear()
+DSSelectionAlert::DSSelectionAlert( ADIState& adiStateRef )
+    : SwitchSequence( SwdFrameTypes::SWD_FT_DS_SEL_ALERT, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT }, {},
+                      adiStateRef, patternDsSelectionAlert )
 {
-    hi64BitData = 0;
-    lo64BitData = 0;
-    bits.clear();
 }
 
 void DSSelectionAlert::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_SEL_ALERT );
-    frame.mData1 = hi64BitData;
-    frame.mData2 = lo64BitData;
-    pResults->AddFrame( frame );
+    auto hi64BitData = GetData( 1u );
+    auto lo64BitData = GetData( 0u );
+    AddFrame( pResults, startSample, endSample, hi64BitData, lo64BitData, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_SEL_ALERT ).c_str() );
-    frameV2.AddInteger( "cycles", 128u );
+    // FrameV2
     std::vector<U8> bytes = ToVectorU8( lo64BitData );
     std::vector<U8> bytesHi = ToVectorU8( hi64BitData );
     bytes.insert( bytes.end(), bytesHi.begin(), bytesHi.end() );
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    AddFrameV2DataSequence( pResults, startSample, endSample, seqFrameType, numberCheckedBits, bytes );
 }
 
 // ********************************************************************************
+
+DSActivationCodePreamble::DSActivationCodePreamble( ADIState& adiStateRef )
+    : SwitchSequence( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE,
+                      { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT }, { SwdFrameTypes::SWD_FT_DS_SEL_ALERT },
+                      adiStateRef, patternDsActivationCodePreamble )
+{
+}
 
 void DSActivationCodePreamble::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-    size_t bitCount = bits.size();
+    const std::size_t bitCount = bits.size();
 
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE );
-    frame.mData1 = bitCount;
-    pResults->AddFrame( frame );
+    AddFrame( pResults, startSample, endSample, bitCount, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE ).c_str() );
-    frameV2.AddInteger( "cycles", bitCount );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    // FrameV2
+    AddFrameV2SimpleSequence( pResults, startSample, endSample, seqFrameType, bitCount );
 }
 
 // ********************************************************************************
 
-void DSActivationCode::Clear()
+DSActivationCode::DSActivationCode( ADIState& adiStateRef )
+    : SwitchSequenceActivationCode( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE, adiStateRef, patternDsActivationCodeJtagSerial,
+                                    patternDsActivationCodeSwDp, patternDsActivationCodeJtagDp )
 {
-    data = 0;
-    bits.clear();
 }
 
 void DSActivationCode::AddFrames( SWDAnalyzerResults* pResults )
 {
-    S64 startSample = bits.front().GetStartSample();
-    S64 endSample = bits.back().GetEndSample();
-
     // Legacy Frame
-    Frame frame;
-    frame.mStartingSampleInclusive = startSample;
-    frame.mEndingSampleInclusive = endSample;
-    frame.mType = static_cast<U8>( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE );
-    frame.mData1 = data;
-    pResults->AddFrame( frame );
+    U16 data = GetData();
+    AddFrame( pResults, startSample, endSample, data, 0u, seqFrameType, 0u );
 
-    // New FrameV2 code.
-    FrameV2 frameV2;
-    frameV2.AddString( "type", SWDFrame::GetSwdFrameV2Name( SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE ).c_str() );
-    frameV2.AddInteger( "cycles", bits.size() );
+    // FrameV2
     std::vector<U8> bytes;
-    if( bits.size() == 8u )
+    if( numberCheckedBits == 8u )
     {
         bytes.push_back( static_cast<U8>( data ) );
     }
@@ -1238,21 +1321,10 @@ void DSActivationCode::AddFrames( SWDAnalyzerResults* pResults )
     {
         bytes = ToVectorU8( data );
     }
-    frameV2.AddByteArray( "data", bytes.data(), bytes.size() );
-    pResults->AddFrameV2( frameV2, "sequence", startSample, endSample );
+    AddFrameV2DataSequence( pResults, startSample, endSample, seqFrameType, numberCheckedBits, bytes );
 }
 
 // ********************************************************************************
-
-void SWDRequestFrame::SetRequestByte( U8 requestByte )
-{
-    mData1 = requestByte;
-}
-
-U8 SWDRequestFrame::GetAddr() const
-{
-    return static_cast<U8>( ( mData1 >> 1 ) & 0xc );
-}
 
 bool SWDRequestFrame::IsRead() const
 {
@@ -1262,11 +1334,6 @@ bool SWDRequestFrame::IsRead() const
 bool SWDRequestFrame::IsAccessPort() const
 {
     return ( mFlags & static_cast<U8>( RQ_FLAG::IS_ACCESS_PORT ) ) != 0;
-}
-
-bool SWDRequestFrame::IsDebugPort() const
-{
-    return !IsAccessPort();
 }
 
 void SWDRequestFrame::SetRegister( SWDRegisters reg )
@@ -1286,10 +1353,6 @@ std::string SWDRequestFrame::GetRegisterName() const
 
 // ********************************************************************************
 
-const U16 SWDParser::SEQUENCE_JTAG_SERIAL = 0x0000u; // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
-const U8 SWDParser::SEQUENCE_SW_DP = 0x1Au;          // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
-const U8 SWDParser::SEQUENCE_JTAG_DP = 0x0Au;        // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
-
 SWDBit SWDParser::ParseBit()
 {
     SWDBit rbit;
@@ -1306,15 +1369,6 @@ SWDBit SWDParser::ParseBit()
     mSWCLK->AdvanceToNextEdge();
     mSWDIO->AdvanceToAbsPosition( mSWCLK->GetSampleNumber() );
 
-    /*
-    // go to the rising eggde
-    mSWCLK->AdvanceToNextEdge();
-    mSWDIO->AdvanceToAbsPosition(mSWCLK->GetSampleNumber());
-
-    rbit.rising = mSWCLK->GetSampleNumber();
-    rbit.state_rising = mSWDIO->GetBitState();
-    */
-
     // go to the falling edge
     mSWCLK->AdvanceToNextEdge();
     mSWDIO->AdvanceToAbsPosition( mSWCLK->GetSampleNumber() );
@@ -1327,107 +1381,76 @@ SWDBit SWDParser::ParseBit()
     return rbit;
 }
 
-void SWDParser::CopyBits( std::deque<SWDBit>& destination, const size_t numBits )
+void SWDBaseSequence::CopyBits( std::deque<SWDBit>& srcBits )
 {
     // clear destination before populating
-    destination.clear();
-    if( numBits > mBitsBuffer.size() / 2 )
+    bits.clear();
+    if( numberCheckedBits > srcBits.size() / 2 )
     {
         // more than half of the buffer needs to be copied, so it will be faster to do the following
         // 1) copy the tail of the buffer into a temporary object, starting from the next after the given bit number
-        std::deque<SWDBit> mBitsBufferTail( mBitsBuffer.begin() + numBits, mBitsBuffer.end() );
+        std::deque<SWDBit> mBitsBufferTail( srcBits.begin() + numberCheckedBits, srcBits.end() );
         // 2) strip tail of buffer starting from the next after the given bit number
-        mBitsBuffer.erase( mBitsBuffer.begin() + numBits, mBitsBuffer.end() );
-        // 3) give the bits to the destination object by swap with mBitsBuffer
-        std::swap( destination, mBitsBuffer );
+        srcBits.erase( srcBits.begin() + numberCheckedBits, srcBits.end() );
+        // 3) give the bits to the destination object by swap with srcBits
+        std::swap( bits, srcBits );
         // 4) keep tail of buffer because that one is probably next operation's start bit
-        std::swap( mBitsBuffer, mBitsBufferTail );
+        std::swap( srcBits, mBitsBufferTail );
     }
     else
     {
         // less than half of the buffer needs to be copied, so it will be faster to do the following
         // 1) copy the buffer head up to the given bit into a temporary object
-        std::deque<SWDBit> mBitsBufferHead( mBitsBuffer.begin(), mBitsBuffer.begin() + numBits );
+        std::deque<SWDBit> mBitsBufferHead( srcBits.begin(), srcBits.begin() + numberCheckedBits );
         // 2) strip head up to the given bit
-        mBitsBuffer.erase( mBitsBuffer.begin(), mBitsBuffer.begin() + numBits );
+        srcBits.erase( srcBits.begin(), srcBits.begin() + numberCheckedBits );
         // 3) give the bits to the destination object by swap with the temporary object
-        std::swap( destination, mBitsBufferHead );
+        std::swap( bits, mBitsBufferHead );
     }
+    UpdateBitInfo();
 }
 
-bool SWDParser::IsAtLeast( const size_t numBits, const BitState bit )
+void SWDParser::CopyBits( SWDBaseSequence& sequence )
 {
-    bool result = true;
-    size_t bitCnt = 0;
-
-    // we need at least num_bits with a given value
-    while( bitCnt < numBits )
-    {
-        if( bitCnt >= mBitsBuffer.size() )
-        {
-            mBitsBuffer.push_back( ParseBit() );
-        }
-
-        // we can't have a bit other than given value
-        if( mBitsBuffer[ bitCnt ].IsHigh() != ( bit == BIT_HIGH ) )
-        {
-            // Not enough bits with given value
-            result = false;
-            break;
-        };
-        bitCnt++;
-    }
-
-    return result;
-}
-
-size_t SWDParser::BitCount( const BitState bit, const size_t startingFromBit )
-{
-    size_t bitCnt = 0;
-
-    // make sure that the startinng bit is placed in buffer
-    BufferBits( startingFromBit );
-    // Process all bits with given value
-    while( true )
-    {
-        const size_t bitIndex = startingFromBit + bitCnt;
-        if( bitIndex >= mBitsBuffer.size() )
-        {
-            mBitsBuffer.push_back( ParseBit() );
-        }
-
-        if( mBitsBuffer[ bitIndex ].IsHigh() != ( bit == BIT_HIGH ) )
-        {
-            // the bit at bitIndex does not match to the given value
-            break;
-        }
-        bitCnt++;
-    }
-
-    return bitCnt;
+    sequence.CopyBits( mBitsBuffer );
 }
 
 SWDParser::SWDParser()
     : mSWDIO( 0 ),
       mSWCLK( 0 ),
       mAnalyzer(),
-      mLastFrameType( SwdFrameTypes::SWD_FT_LINE_RESET ),
-      mCurrentProtocol( DebugProtocol::DPROTOCOL_UNKNOWN ),
-      mDPVersion( DPVersion::DP_V0 ),
-      mTran(),
-      mReset(),
-      mJtagToSwd(),
-      mSwdToJtag(),
-      mErrorBits(),
-      mIdleCycles(),
-      mJtagToDs(),
-      mSwdToDs(),
-      mDsSelectionAlert(),
-      mDsActivationCode(),
-      mSelectRegister()
-
+      mAdiState(),
+      mTran( mAdiState ),
+      mReset( mAdiState ),
+      mJtagToSwd( mAdiState ),
+      mSwdToJtag( mAdiState ),
+      mErrorBits( mAdiState ),
+      mIdleCycles( mAdiState ),
+      mJtagTlr( mAdiState ),
+      mJtagToDs( mAdiState ),
+      mSwdToDs( mAdiState ),
+      mDsSelectionAlertPreamble( mAdiState ),
+      mDsSelectionAlert( mAdiState ),
+      mDsActivationCodePreamble( mAdiState ),
+      mDsActivationCode( mAdiState ),
+      mSequences( {
+          std::ref(mReset),                    // 50,... - SWD line reset. At least 50 SWCLKTCK cycles with SWDIOTMS HIGH.
+          std::ref(mJtagToSwd),                // 16 - JTAG-to-SWD select sequence
+          std::ref(mSwdToJtag),                // 16 - SWD-to-JTAG select sequence
+          std::ref(mSwdToDs),                  // 16 - SWD-to-DS select sequence
+          std::ref(mJtagToDs),                 // 31 - JTAG-to-DS select sequence
+          std::ref(mTran),                     // 12,64 - SWD read/write operation
+          std::ref(mJtagTlr),                  // 5,... - Enters to JTAG Test-Logic-Reset state
+          std::ref(mDsSelectionAlertPreamble), // 8,... - Selection Alert preamble. At least 8 SWCLKTCK cycles with SWDIOTMS HIGH.
+          std::ref(mDsSelectionAlert),         // 128 - Selection Alert sequence
+          std::ref(mDsActivationCodePreamble), // 4 - Activation Code preamble. 4 SWCLKTCK cycles with SWDIOTMS LOW
+          std::ref(mDsActivationCode),         // 8,12 - Activation Code sequence
+          std::ref(mIdleCycles)                // 1,... - SWD idle cycles. SWCLKTCK cycles with SWDIOTMS LOW
+      } )
 {
 }
+
+
 
 void SWDParser::Setup( AnalyzerChannelData* pSWDIO, AnalyzerChannelData* pSWCLK, SWDAnalyzer* pAnalyzer )
 {
@@ -1447,702 +1470,598 @@ void SWDParser::Setup( AnalyzerChannelData* pSWDIO, AnalyzerChannelData* pSWCLK,
 void SWDParser::Clear()
 {
     mBitsBuffer.clear();
-    mSelectRegister = 0;
-    mDPVersion = DPVersion::DP_V0;
-    mLastFrameType = SwdFrameTypes::SWD_FT_LINE_RESET;
-    mCurrentProtocol = DebugProtocol::DPROTOCOL_UNKNOWN;
+    mAdiState.SetSelect( 0u );
+    mAdiState.SetDPVersion( DPVersion::DP_V0 );
+    mAdiState.SetLastFrameType( SwdFrameTypes::SWD_FT_LINE_RESET );
+    mAdiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_UNKNOWN );
 }
 
-void SWDParser::BufferBits( const size_t numBits )
+bool SWDParser::IsBufferEmpty() const
 {
-    while( mBitsBuffer.size() < numBits )
-        mBitsBuffer.push_back( ParseBit() );
+    return mBitsBuffer.empty();
+}
+
+void SWDParser::AddBitToBuffer()
+{
+    mBitsBuffer.push_back( ParseBit() );
 }
 
 SwdFrameTypes SWDParser::GetLastFrameType() const
 {
-    return mLastFrameType;
+    return mAdiState.GetLastFrameType();
 }
 
 DebugProtocol SWDParser::GetCurrentProtocol() const
 {
-    return mCurrentProtocol;
+    return mAdiState.GetCurrentProtocol();
 }
 
 void SWDParser::SetCurrentProtocol( DebugProtocol protocol )
 {
-    mCurrentProtocol = protocol;
+    mAdiState.SetCurrentProtocol( protocol );
 }
 
 void SWDParser::SetLastFrameType( SwdFrameTypes frame )
 {
-    mLastFrameType = frame;
+    mAdiState.SetLastFrameType( frame );
 }
 
 void SWDParser::SetDPVersion( DPVersion version )
 {
-    mDPVersion = version;
-}
-
-DPVersion SWDParser::GetDPVersion() const
-{
-    return mDPVersion;
+    mAdiState.SetDPVersion( version );
 }
 
 void SWDParser::SetNumTurnarounds( U8 num )
 {
-    mTran.SetTurnaroundNumber( num );
+	mAdiState.SetTurnaroundNumber( num );
+}
+
+DPVersion SWDParser::GetDPVersion() const
+{
+    return mAdiState.GetDPVersion();
 }
 
 void SWDParser::SetOverrunDetection( bool enabled )
 {
-    mTran.SetOrunDetect( enabled );
+    mAdiState.SetOverrunDetection( enabled );
 }
 
 void SWDParser::SetSelectRegister( U32 value )
 {
-    mSelectRegister = value;
+    mAdiState.SetSelect( value );
 }
 
-
-bool SWDParser::IsOperation()
+OpBitRange SWDOperation::GetOpBitRange( const std::vector<std::pair<OpBitRange, OpItemSize>>* opItemSize, const std::size_t bitIdx ) const
 {
-    mTran.Clear();
-
-    // read enough bits so that we don't have to worry of subscripts out of range
-    // 8bit request + turnaround bit(s) + three bits ACK = 12 bits in case 1 turnaround bit
-    size_t headerLength = 8u + mTran.GetTurnaroundNumber() + 3u;
-    BufferBits( headerLength );
-
-    // turn the request bits into a byte
-    U8 reqByte = 0u;
-    for( size_t cnt = 0u; cnt < 8u; ++cnt )
+    OpBitRange bitRange = OpBitRange::OP_UNDEFINED_RANGE;
+    std::size_t startIdx = 0;
+    for( const auto& range : *opItemSize )
     {
-        reqByte >>= 1u;
-        reqByte |= ( mBitsBuffer[ cnt ].IsHigh() ? 0x80u : 0u );
-    }
-    mTran.requestByte = reqByte;
-    bool isTargetSel = ( reqByte == 0x99u ); // During the response phase of a write to the TARGETSEL register, the target does not drive the line.
-                                             // So ACK bits shouldn't be analysed
-
-    SWDRequestByte requestByte(reqByte);
-
-    // are the request's constant bits (start, stop, park and parity) wrong?
-    if( !requestByte.IsByteValid() )
-    {
-        return false;
-    }
-
-    // get the indivitual bits
-    mTran.reqAPnDP = requestByte.GetAPnDP();
-    mTran.reqRnW = requestByte.GetRnW();
-    mTran.addr = requestByte.GetAddr();
-
-    // Set the actual register in this operation based on the data from the request
-    // and the previous select register state.
-    mTran.SetDPVer( mDPVersion );
-    mTran.SetRegister( mSelectRegister );
-
-    // get the ACK value
-    mTran.reqAck = ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 0u ].stateRising == BIT_HIGH ? ( 1u << 0u ) : 0u ) +
-                ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 1u ].stateRising == BIT_HIGH ? ( 1u << 1u ) : 0u ) +
-                ( mBitsBuffer[ 8u + mTran.GetTurnaroundNumber() + 2u ].stateRising == BIT_HIGH ? ( 1u << 2u ) : 0u );
-
-    // handling non-OK response if Overrun detection is not enabled or it is a write operation to the TARGETSEL register
-    if( !mTran.orundetect && !isTargetSel && ( mTran.reqAck != static_cast<U8>( SWDAcks::ACK_OK ) ) )
-    {
-        size_t badTranLength = 8u + mTran.GetTurnaroundNumber() + 3u;
-        if( ( mTran.reqAck == static_cast<U8>( SWDAcks::ACK_WAIT ) ) || ( mTran.reqAck == static_cast<U8>( SWDAcks::ACK_FAULT ) ) )
+        const std::size_t rangeSize = static_cast<std::size_t>( range.second );
+        if( ( bitIdx >= startIdx ) && ( bitIdx < ( startIdx + rangeSize ) ) )
         {
-            // 8bit request + turnaround bit(s) + three bits ACK + turnaround bit(s) = 13 bits in case 1 turnaround bit
-            // read turnaround bit(s) after ACK
-            badTranLength += mTran.GetTurnaroundNumber();
-            // read one more bit that is turnaround after ACK
-            BufferBits( badTranLength );
+            bitRange = range.first;
+            break;
         }
-        // give the bits to the tran object
-        CopyBits( mTran.bits, badTranLength );
-
-        return true;
+        startIdx += rangeSize;
     }
-
-    // for read operation:  8bit request + turnaround bit(s) + three bits ACK
-    //                      + 32bit data + parity + turnaround bit(s) = 46 bits in case 1 turnaround bit
-    // for write operation: 8bit request + turnaround bit(s) + three bits ACK
-    //                      + turnaround bit(s) + 32bit data + parity = 46 bits in case 1 turnaround bit
-    size_t tranLength = 8u + mTran.GetTurnaroundNumber() + 3u + 32u + 1u + mTran.GetTurnaroundNumber();
-
-    BufferBits( tranLength );
-
-    std::deque<SWDBit>::iterator bi( mBitsBuffer.begin() + headerLength );
-    // turnaround if write operation
-    if( !mTran.IsRead() )
-    {
-        // jump over turnaround bit if it is write operation
-        bi += mTran.GetTurnaroundNumber();
-    }
-
-    // read the data
-    mTran.data = 0u;
-    U8 check = 0u;
-    size_t ndx;
-    for( ndx = 0u; ndx < 32u; ndx++ )
-    {
-        mTran.data >>= 1u;
-
-        if( bi[ ndx ].IsHigh() )
-        {
-            mTran.data |= 0x80000000u;
-            ++check;
-        }
-    }
-
-    // data parity
-    mTran.dataParity = bi[ ndx ].IsHigh() ? 1u : 0u;
-
-    mTran.dataParityOk = ( mTran.dataParity == ( check & 1u ) );
-
-    if( !mTran.orundetect && !mTran.dataParityOk )
-        return false;
-
-    // give the bits to the tran object
-    CopyBits( mTran.bits, tranLength );
-
-    return true;
+    return bitRange;
 }
 
-bool SWDParser::IsLineReset()
+std::size_t SWDOperation::GetOpBitRangeFirstBitIdx( const std::size_t bitIdx ) const
 {
-    const size_t minimumBitCnt = 50; // Required at least 50 bits
-    mReset.Clear();                  // Clear the bits
-
-    // we need at least 50 bits with a value of 1
-    if( !IsAtLeast( minimumBitCnt, BIT_HIGH ) )
-    {
-        // Not enough bits with value 1
-        return false;
+    const std::vector<const std::vector<std::pair<OpBitRange, OpItemSize>>*> opItemSizes = {
+        opReqAndAckItemSize,
+        ( reqRnW ? opRdataItemSize : opWdataItemSize )
     };
 
-    // Get number of continuous 1
-    size_t lineResetCnt = minimumBitCnt + BitCount( BIT_HIGH, minimumBitCnt );
-
-    // Buffer 7 more bits
-    BufferBits( lineResetCnt + 7u );
-
-    U16 lastBits = 0u;
-    // get bits in the offset range from -5 to +7 around lineResetCnt
-    for( size_t i = lineResetCnt - 5u; i < lineResetCnt + 7u; ++i )
+    std::size_t startIdx = 0;
+    for( const auto& itemSizes : opItemSizes )
     {
-        lastBits <<= 1u;
-        if( mBitsBuffer[ i ].IsHigh() )
+        for( const auto& range : *itemSizes )
         {
-            lastBits |= 1u;
+            const std::size_t rangeSize = static_cast<std::size_t>( range.second );
+            if( ( bitIdx >= startIdx ) && ( bitIdx < ( startIdx + rangeSize ) ) )
+            {
+                return startIdx;
+            }
+            startIdx += rangeSize;
         }
     }
+    return startIdx;
+}
 
-    // Check if the last bits "1" is not the beginning of the next swd request
-    for( size_t i = 0; i < 5u; ++i )
+
+void SWDOperation::GetAndParseOperationRequest( const std::deque<SWDBit>& bits )
+{
+    for( ; ( numberCheckedBits < static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) ) && ( numberCheckedBits < bits.size() ) && ( seqCheckResult != SeqCmpResult::SEQ_MISMATCH ); ++numberCheckedBits )
     {
-        U8 reqByte = ( lastBits >> ( 4u - i ) );
-        SWDRequestByte requestByte( reqByte );
-        if( requestByte.IsByteValid() )
+        const bool isBitHigh = bits[ numberCheckedBits ].IsHigh();
+        const U8 bit = isBitHigh ? 1u : 0u;
+        reqByte |= ( bit << numberCheckedBits );
+        switch (numberCheckedBits)
         {
-            // Detected a valid SWD request butted to SWD reset sequence
-            lineResetCnt -= ( 5u - i );
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_START ):
+                // Start: A single start bit, with value 0b1
+                seqCheckResult = isBitHigh ? SeqCmpResult::SEQ_MATCH_PARTIALLY : SeqCmpResult::SEQ_MISMATCH;
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_AP_N_DP ):
+                // APnDP: A single bit, indicating whether the Debug Port or the Access Port Access register is to be accessed. 
+                //        This bit is 0b0 for a DPACC access, or 0b1 for an APACC access.
+                reqAPnDP = isBitHigh;
+                reqParity = bit;
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_R_N_W ):
+                // RnW: A single bit, indicating whether the access is a read or a write. This bit is 0b0 for a write access, or 
+                //      0b1 for a read access.
+                reqRnW = isBitHigh;
+                reqParity += bit;
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_A2 ):
+                // A[2]: This bit, giving the A[3:2] address field for the DP or AP register Address.
+                reqA23Addr = (bit << 2u);
+                reqParity += bit;
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_A3 ):
+                // A[3]: This bit, giving the A[3:2] address field for the DP or AP register Address.
+                reqA23Addr |= (bit << 3u);
+                reqParity += bit;
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_PARITY ):
+                // Parity: A single parity bit for the preceding packet. The parity check is made over the four bits APnDP, RnW and A[2:3]:
+                //          If the number of bits with a value of 0b1 is odd, the parity bit is set to 0b1.
+                //          If the number of bits with a value of 0b1 is even, the parity bit is set to 0b0.
+                if( bit != ( reqParity & 1u ) )
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_STOP ):
+                // Stop: A single stop bit. In the synchronous SWD protocol, this bit is always 0b0.
+                if( bit != 0u )
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+                break;
+            case static_cast<std::size_t>( OP_REQUEST_BIT::OP_REQ_PARK ):
+                // Park: A single bit. The host must drive the Park bit HIGH to park the line before tristating it for the 
+                //       turnaround period, to ensure that the line is read as HIGH by the target,
+                //       which is required because the pull - up on the SWD interface is weak.The target reads this bit as 0b1.
+                if( bit != 1u )
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+                else
+                {
+                    // Check for Write to DP register 0xC, TARGETSEL, where the data indicates the selected target. The target response must be ignored. 
+                    if( !reqAPnDP && !reqRnW && ( ( reqA23Addr & 0x0Cu ) == 0x0Cu ) )
+                    {
+                        adiState.SetIgnoreAck( true );
+                    }
+                    // Update data offset
+                    if (reqRnW)
+                    {
+                        // RDATA offset
+                        opDataOffset = opReqAndAckSize;
+                    }
+                    else
+                    {
+                        // WDATA offset
+                        opDataOffset = opReqAndAckSize + adiState.GetTurnaroundNumber();
+                    }
+                    // Set the actual register in this operation based on the data from the request and the previous select register state.
+                    adiState.DetermineRegister( reqAPnDP, reqRnW, reqA23Addr );
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+void SWDOperation::GetAndParseOperationTurnaround( const std::deque<SWDBit>& bits )
+{
+    const std::size_t turnaroundNumber = adiState.GetTurnaroundNumber();
+    std::size_t turnaroundBitIdx = numberCheckedBits - GetOpBitRangeFirstBitIdx( numberCheckedBits );
+    for( ; ( turnaroundBitIdx < turnaroundNumber ) && ( numberCheckedBits < bits.size() ); ++numberCheckedBits, ++turnaroundBitIdx )
+    {
+        // Ignore turaround bits
+    }
+    if( numberCheckedBits > opReqAndAckSize )
+    {
+        // Check ACK against WAIT and FAULT responces on second turnaround
+        if( turnaroundBitIdx == turnaroundNumber )
+        {
+            if( adiState.GetIgnoreAck() || ( reqAck == SWDAcks::ACK_OK ) )
+            {
+                if( reqRnW )
+                {
+                    // This is the last bit on successful read operation
+                    seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+                }
+            }
+            else
+            {
+                // Stop further comparing on WAIT or FAULT rssponces
+                seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+            }
+        }
+    }
+}
+
+void SWDOperation::GetAndParseOperationAck( const std::deque<SWDBit>& bits )
+{
+    auto ackBitIdx = numberCheckedBits - GetOpBitRangeFirstBitIdx( numberCheckedBits );
+    for( ; ( ackBitIdx < static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE ) ) && ( numberCheckedBits < bits.size() );
+         ++numberCheckedBits, ++ackBitIdx )
+    {
+        const bool isBitHigh = bits[ numberCheckedBits ].IsHigh();
+        const U8 bit = isBitHigh ? 1u : 0u;
+        reqAck |= ( bit << ackBitIdx );
+    }
+    // Chechk ACK against invalid responces
+    if( ackBitIdx == static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE ) )
+    {
+        bool ignoreAck = adiState.GetIgnoreAck();
+        if( !ignoreAck )
+        {
+            if( ( reqAck == 0u ) || ( ( reqAck & ( reqAck - 1u ) ) != 0u ) )
+            {
+                // Stop further comparing due to invalid ACK
+                seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+            }
+        }
+        if( ignoreAck || ( reqAck == SWDAcks::ACK_OK ) )
+        {
+            // Update Data offset
+            opDataOffset = opReqAndAckSize + ( reqRnW ? 0u : adiState.GetTurnaroundNumber() );
+        }
+    }
+}
+
+void SWDOperation::GetAndParseOperationData( const std::deque<SWDBit>& bits )
+{
+    auto dataBitIdx = numberCheckedBits - GetOpBitRangeFirstBitIdx( numberCheckedBits );
+    for( ; ( dataBitIdx < static_cast<std::size_t>( OpItemSize::OP_DATA_SIZE ) ) && ( numberCheckedBits < bits.size() ); ++numberCheckedBits, ++dataBitIdx )
+    {
+        const bool isBitHigh = bits[ numberCheckedBits ].IsHigh();
+        const U32 bit = isBitHigh ? 1u : 0u;
+        data |= ( bit << dataBitIdx );
+        calculatedDataParity += bit;
+    }
+}
+
+void SWDOperation::GetAndParseOperationDataParity( const std::deque<SWDBit>& bits )
+{
+    const bool isBitHigh = bits[ numberCheckedBits ].IsHigh();
+    const U8 bit = isBitHigh ? 1u : 0u;
+    dataParity = isBitHigh ? 1u : 0u;
+    dataParityOk = ( dataParity == ( calculatedDataParity & 1u ) );
+    if( !reqRnW )
+    {
+        // This is the last bit on successful write operation
+        seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+    }
+    numberCheckedBits++;
+}
+
+SeqCmpResult SWDOperation::Match( const std::deque<SWDBit>& bits )
+{
+    if( BreakMatch( bits ) )
+    {
+        return seqCheckResult;
+    }
+    // Loop through the unchecked bits.
+    for( ; ( numberCheckedBits < bits.size() ) && ( seqCheckResult != SeqCmpResult::SEQ_MISMATCH ); )
+    {
+        // Determine which range a bit belongs to
+        OpBitRange bitRange{ OpBitRange::OP_UNDEFINED_RANGE };
+        if( numberCheckedBits < opReqAndAckSize )
+        {
+            bitRange = GetOpBitRange( opReqAndAckItemSize, numberCheckedBits );
+        }
+        else
+        {
+            if( adiState.GetIgnoreAck() || ( reqAck == SWDAcks::ACK_OK ) )
+            {
+                // Data transfers (WDATA and RDATA)
+                if( reqRnW )
+                {
+                    bitRange = GetOpBitRange( opRdataItemSize, numberCheckedBits - opReqAndAckSize );
+                }
+                else
+                {
+                    bitRange = GetOpBitRange( opWdataItemSize, numberCheckedBits - opReqAndAckSize );
+                }
+            }
+            else
+            {
+                // Turnarond bits after WAIT or FAULT rssponces
+                bitRange = OpBitRange::OP_TURNAROUND_RANGE;
+            }
+        }
+        switch( bitRange )
+        {
+        case OpBitRange::OP_REQUEST_RANGE:
+            GetAndParseOperationRequest( bits );
+            break;
+        case OpBitRange::OP_TURNAROUND_RANGE:
+            GetAndParseOperationTurnaround( bits );
+            break;
+        case OpBitRange::OP_ACK_RANGE:
+            GetAndParseOperationAck( bits );
+            break;
+        case OpBitRange::OP_DATA_RANGE:
+            GetAndParseOperationData( bits );
+            break;
+        case OpBitRange::OP_DATA_PARITY_RANGE:
+            GetAndParseOperationDataParity( bits );
+            break;
+        default:
             break;
         }
     }
 
-    // give the bits to the reset object
-    CopyBits( mReset.bits, lineResetCnt );
-
-    return true;
+    return seqCheckResult;
 }
 
-bool SWDParser::IsJtagToSwd()
+SeqCmpResult SWDLineReset::Match(const std::deque<SWDBit>& bits)
 {
-    mJtagToSwd.Clear();
-    const U16 sequence = 0xE79E;           // 0xE79E, transmitted LSB first
-    const U16 sequenceDeprecated = 0xEDB6; // 0xEDB6, transmitted LSB first
-
-    // Check for 0xE79E value, transmitted LSB first
-    bool sequenceMatched = IsUintSequence( &sequence );
-
-    if( sequenceMatched )
+    constexpr size_t minimumBitCnt = 50u; // Required at least 50 bits
+    if( BreakMatch( bits ) )
     {
-        mJtagToSwd.data = sequence;
+        return seqCheckResult;
     }
-    else
+    // Loop through the unchecked bits.
+    for( ; ( numberCheckedBits < bits.size() ) && ( seqCheckResult != SeqCmpResult::SEQ_MISMATCH ); ++numberCheckedBits )
     {
-        // Check for deprecated 0xEDB6 value, transmitted LSB first
-        sequenceMatched = IsUintSequence( &sequenceDeprecated );
-
-        if( sequenceMatched )
+        if( firstLowBitOffset == 0 )
         {
-            mJtagToSwd.deprecated = true;
-            mJtagToSwd.data = sequenceDeprecated;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    // give the bits to the reset object
-    CopyBits( mJtagToSwd.bits, 16u );
-
-    return true;
-}
-
-bool SWDParser::IsSwdToJtag()
-{
-    mSwdToJtag.Clear();
-    const U16 sequence = 0xE73C;           // 0xE73C, transmitted LSB first
-    const U16 sequenceDeprecated = 0xAEAE; // 0xAEAE, transmitted LSB first
-
-    // Check for 0xE73C value, transmitted LSB first
-    bool sequenceMatched = IsUintSequence( &sequence );
-
-    if( sequenceMatched )
-    {
-        mSwdToJtag.data = sequence;
-    }
-    else
-    {
-        // Check for deprecated 0xAEAE value, transmitted LSB first
-        sequenceMatched = IsUintSequence( &sequenceDeprecated );
-
-        if( sequenceMatched )
-        {
-            mSwdToJtag.deprecated = true;
-            mSwdToJtag.data = sequenceDeprecated;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    // give the bits to the reset object
-    CopyBits( mSwdToJtag.bits, 16u );
-
-    return true;
-}
-
-bool SWDParser::IsIdleCycles()
-{
-    mIdleCycles.Clear(); // Clear the bits
-
-    // Get number of continuous 0
-    size_t idleCyclesCnt = BitCount( BIT_LOW, 0 );
-    if( idleCyclesCnt == 0 )
-    {
-        // No idle cycles found
-        return false;
-    }
-    // give the bits to the idleCycles object
-    CopyBits( mIdleCycles.bits, idleCyclesCnt );
-
-    return true;
-}
-
-bool SWDParser::IsJtagTlr()
-{
-    const size_t minimumBitCnt = 5u; // Required at least 5 bits
-    mJtagTlr.Clear();                // Clear the bits
-
-    // we need at least 5 bits with a value of 1
-    if( !IsAtLeast( minimumBitCnt, BIT_HIGH ) )
-    {
-        // Not enough bits with value 1
-        return false;
-    };
-
-    // Get number of continuous 1
-    size_t highBitCnt = minimumBitCnt + BitCount( BIT_HIGH, minimumBitCnt );
-    // give the bits to the JTAG Test Logic Reset object
-    CopyBits( mJtagTlr.bits, highBitCnt );
-
-    return true;
-}
-
-bool SWDParser::IsJtagToDs()
-{
-    mJtagToDs.Clear();
-    const U32 sequence = 0x33BBBBBA; // 0x33BBBBBA, 31 bits transmitted LSB first
-
-    bool sequenceMatched = IsUintSequence( &sequence, 31u );
-
-    if( sequenceMatched )
-    {
-        mJtagToDs.data = sequence;
-    }
-    else
-    {
-        return false;
-    }
-    // give the bits to the JTAG-to-DS object
-    CopyBits( mJtagToDs.bits, 31u );
-
-    return true;
-}
-
-bool SWDParser::IsSwdToDs()
-{
-    mSwdToDs.Clear();
-    const U16 sequence = 0xE3BC; // 0xE3BC, transmitted LSB first
-
-    // Check for 0xE73C value, transmitted LSB first
-    bool sequenceMatched = IsUintSequence( &sequence );
-
-    if( sequenceMatched )
-    {
-        mSwdToDs.data = sequence;
-    }
-    else
-    {
-        return false;
-    }
-
-    // give the bits to the SWD-to-DS object
-    CopyBits( mSwdToDs.bits, 16u );
-
-    return true;
-}
-
-bool SWDParser::IsDsSelectionAlertPreamble()
-{
-    const size_t minimumBitCnt = 8u;   // Required at least 8 bits
-    mDsSelectionAlertPreamble.Clear(); // Clear the bits
-
-    // we need at least 8 bits with a value of 1
-    if( !IsAtLeast( minimumBitCnt, BIT_HIGH ) )
-    {
-        // Not enough bits with value 1
-        return false;
-    };
-
-    // Get number of continuous 1
-    size_t highBitCnt = minimumBitCnt + BitCount( BIT_HIGH, minimumBitCnt );
-    // give the bits to the Selection Alert sequence preamble object
-    CopyBits( mDsSelectionAlertPreamble.bits, highBitCnt );
-
-    return true;
-}
-
-bool SWDParser::IsDsSelectionAlert()
-{
-    mDsSelectionAlert.Clear();
-    const U64 sequence[ 2u ] = {
-        0x86852D956209F392u, // Low 64 bits transmitted LSB first
-        0x19BC0EA2E3DDAFE9u  // Hihg 64 bits transmitted LSB first
-    };
-
-    bool sequenceMatched = IsUintSequence( sequence, 128u );
-
-    if( sequenceMatched )
-    {
-        mDsSelectionAlert.hi64BitData = sequence[ 1u ];
-        mDsSelectionAlert.lo64BitData = sequence[ 0u ];
-    }
-    else
-    {
-        return false;
-    }
-    // give the bits to the DS Selection Alert sequence object
-    CopyBits( mDsSelectionAlert.bits, 128u );
-
-    return true;
-}
-
-bool SWDParser::IsDsActivationCodePreamble()
-{
-    mDsActivationCodePreamble.Clear();
-    const U8 sequence = 0x00; // 0x00, 4 cycles with SWDIOTMS LOW
-
-    // Check for 0x00 value, transmitted LSB first
-    bool sequenceMatched = IsUintSequence( &sequence, 4u );
-
-    if( !sequenceMatched )
-    {
-        return false;
-    }
-
-    // give the bits to the SWD-to-DS object
-    CopyBits( mDsActivationCodePreamble.bits, 4u );
-
-    return true;
-}
-
-bool SWDParser::IsDsActivationCode()
-{
-    mDsActivationCode.Clear();
-    size_t sequenceLength = 0;
-
-    bool sequenceMatched = IsUintSequence( &SEQUENCE_JTAG_SERIAL, 12u );
-
-    if( sequenceMatched )
-    {
-        mDsActivationCode.data = SEQUENCE_JTAG_SERIAL;
-        sequenceLength = 12u;
-    }
-    else
-    {
-        sequenceMatched = IsUintSequence( &SEQUENCE_SW_DP );
-        if( sequenceMatched )
-        {
-            mDsActivationCode.data = SEQUENCE_SW_DP;
-            sequenceLength = 8u;
-        }
-        else
-        {
-            sequenceMatched = IsUintSequence( &SEQUENCE_JTAG_DP );
-            if( sequenceMatched )
+            if( bits[ numberCheckedBits ].IsHigh() )
             {
-                mDsActivationCode.data = SEQUENCE_JTAG_DP;
-                sequenceLength = 8u;
+                // The bit is high
+                if( numberCheckedBits == 0u )
+                {
+                    // The first bit
+                    seqCheckResult = SeqCmpResult::SEQ_MATCH_PARTIALLY;
+                }
             }
             else
             {
-                return false;
+                if( numberCheckedBits >= minimumBitCnt )
+                {
+                    // The first low bit is at least 50 bits from the start
+                    firstLowBitOffset = numberCheckedBits;
+                }
+                else
+                {
+                    // The first low bit is less than 50 bits from the start
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+            }
+        }
+        else
+        {
+            // The bits after the first low bit will be checked against joined SWD transaction request
+            SeqCmpResult cmpJoinedOpResults = SeqCmpResult::SEQ_UNKNOWN;
+            for( const auto& pattern : patternSwdReq )
+            {
+                SeqCmpResult cmpJoinedOpResult = pattern.get().Match( bits, firstLowBitOffset );
+                if( cmpJoinedOpResult == SeqCmpResult::SEQ_MATCH_COMPLETELY )
+                {
+                    if( ( ( numberCheckedBits - firstLowBitOffset + 1u ) == pattern.get().GetBitCount() ) &&
+                        ( numberCheckedBits >= minimumBitCnt + static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) ) )
+                    {
+                        seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+                        numberCheckedBits -= ( static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) -
+                                 1u ); // Tha last 8 bits are part of the joined SWD transaction request
+                        return seqCheckResult;
+                    }
+                    else
+                    {
+                        cmpJoinedOpResult = SeqCmpResult::SEQ_MISMATCH;
+                    }
+                }
+                cmpJoinedOpResults = BestMach( cmpJoinedOpResults, cmpJoinedOpResult );
+            }
+            if( cmpJoinedOpResults == SeqCmpResult::SEQ_MISMATCH )
+            {
+                // The bits after the first low bit do not match any joined SWD transaction request fall back to the clean SWD reset
+                // sequence
+                seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+                numberCheckedBits = firstLowBitOffset;
+                return seqCheckResult;
             }
         }
     }
-    // give the bits to the DS Activation Code sequence object
-    CopyBits( mDsActivationCode.bits, sequenceLength );
-
-    return true;
+    return seqCheckResult;
 }
 
+SeqCmpResult SWDParser::Match( SWDBaseSequence& sequence )
+{
+    return sequence.Match( mBitsBuffer );
+}
 
-SWDBaseSequnce& SWDParser::GetLineReset()
+std::vector<std::reference_wrapper<SWDBaseSequence>>& SWDParser::GetSequences()
 {
-    return mReset;
+    return mSequences;
 }
-SWDBaseSequnce& SWDParser::GetJtagToSwd()
-{
-    return mJtagToSwd;
-}
-SWDBaseSequnce& SWDParser::GetSwdToJtag()
-{
-    return mSwdToJtag;
-}
-SWDBaseSequnce& SWDParser::GetOperation()
-{
-    return mTran;
-}
-SWDBaseSequnce& SWDParser::GetIdleCycles()
-{
-    return mIdleCycles;
-}
-SWDBaseSequnce& SWDParser::GetJtagTlr()
-{
-    return mJtagTlr;
-}
-SWDBaseSequnce& SWDParser::GetJtagToDs()
-{
-    return mJtagToDs;
-}
-SWDBaseSequnce& SWDParser::GetSwdToDs()
-{
-    return mSwdToDs;
-}
-SWDBaseSequnce& SWDParser::GetDsSelectionAlertPreamble()
-{
-    return mDsSelectionAlertPreamble;
-}
-SWDBaseSequnce& SWDParser::GetDsSelectionAlert()
-{
-    return mDsSelectionAlert;
-}
-SWDBaseSequnce& SWDParser::GetDsActivationCodePreamble()
-{
-    return mDsActivationCodePreamble;
-}
-SWDBaseSequnce& SWDParser::GetDsActivationCode()
-{
-    return mDsActivationCode;
-}
+
 SWDErrorBits& SWDParser::GetErrorBits()
 {
     return mErrorBits;
 }
 
-void SWDParser::SetLineReset()
+void SWDLineReset::UpdateAdiState()
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_LINE_RESET;
+    SWDBaseSequence::UpdateAdiState();
+    adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_UNKNOWN );
 
     // Forcing DP registers that are dependent on the SWD line reset.
     // DLCR.TURNROUND <- 0; Set number of turnaround cycles to 1
-    mTran.SetTurnaroundNumber( 1u );
+    adiState.SetTurnaroundNumber( 1u );
     // SELECT.DPBANKSEL <- 0;
-    mSelectRegister &= 0xFFFFFFF0u;
+    adiState.SetSelect( adiState.GetSelect() & 0xFFFFFFF0u );
 }
-void SWDParser::SetJtagToSwd()
+void JTAGToSWD::UpdateAdiState()
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_JTAG_TO_SWD;
-    mCurrentProtocol = DebugProtocol::DPROTOCOL_SWD;
+    SWDBaseSequence::UpdateAdiState();
+    adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_SWD );
 }
-void SWDParser::SetSwdToJtag()
+void SWDToJTAG::UpdateAdiState()
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_SWD_TO_JTAG;
-    mCurrentProtocol = DebugProtocol::DPROTOCOL_JTAG;
+    SWDBaseSequence::UpdateAdiState();
+    adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_JTAG );
 }
-void SWDParser::SetOperation()
+void SWDOperation::UpdateAdiState() 
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_OPERATION;
+    SWDBaseSequence::UpdateAdiState();
 
     // Make further decision based on ACK
-    if( mTran.reqAck == static_cast<U8>( SWDAcks::ACK_OK ) )
+    if( reqAck == SWDAcks::ACK_OK )
     {
-        mCurrentProtocol = DebugProtocol::DPROTOCOL_SWD;
-        switch( mTran.reg )
+        // If ACK is OK, then the transaction is successful
+        const SWDRegisters reg = adiState.GetRegister();
+        switch( reg )
         {
             case SWDRegisters::SWDR_DP_DPIDR:
                 // if this is read DPIDR, capture the Version of the DP architecture implemented.
-                switch( ( mTran.data >> 12u ) & 0x0fu )
+                switch( ( data >> 12u ) & 0x0fu )
                 {
                 case 0x01u:
-                    mDPVersion = DPVersion::DP_V1;
+                    adiState.SetDPVersion( DPVersion::DP_V1 );
                     break;
                 case 0x02u:
-                    mDPVersion = DPVersion::DP_V2;
+                    adiState.SetDPVersion( DPVersion::DP_V2 );
                     break;
                 case 0x03u:
-                    mDPVersion = DPVersion::DP_V3;
+                    adiState.SetDPVersion( DPVersion::DP_V3 );
                     break;
                 default:
-                    mDPVersion = DPVersion::DP_V0;
+                    adiState.SetDPVersion( DPVersion::DP_V0 );
                     break;
                 }
                 break;
             case SWDRegisters::SWDR_DP_CTRL_STAT:
                 // Capture the ORUNDETECT bit of the DP CTRL/STAT register when reading from or writing to it.
-                mTran.SetOrunDetect( ( mTran.data & 0x00000001u ) != 0u );
+                adiState.SetOverrunDetection( ( data & 0x00000001u ) != 0u );
                 break;
             case SWDRegisters::SWDR_DP_SELECT:
                 // if this is a SELECT register write, remember the value
-                mSelectRegister = mTran.data;
+                adiState.SetSelect( data );
                 break;
             case SWDRegisters::SWDR_DP_DLCR:
                 // if this is a DLCR register read or write, update number of turnaround cycles
-                mTran.SetTurnaroundNumber( ( ( mTran.data >> 8u ) & 0x03u ) + 1u );
+                adiState.SetTurnaroundNumber( ( ( data >> 8u ) & 0x03u ) + 1u );
                 break;
             default:
-                if (mTran.IsRead())
+                if( reqRnW )
                 {
                     // Read op
-                    if( mTran.IsAp() || ( mTran.reg == SWDRegisters::SWDR_DP_RDBUFF ) )
+                    if( reqAPnDP || ( reg == SWDRegisters::SWDR_DP_RDBUFF ) )
                     {
-                        CapureApRegData( mTran.lastRegister );
+                        CapureApRegData( adiState.GetLastReadRegister() );
                     }
                 }
                 else
                 {
                     // Write op
-                    CapureApRegData( mTran.reg );
+                    CapureApRegData( reg );
                 }
                 break;
         }
         // Update previous AP read operation register
-        if( mTran.IsRead() )
+        if( reqRnW )
         {
-            if( mTran.IsAp() )
+            if( reqAPnDP )
             {
-                mTran.lastRegister = mTran.reg;
+                adiState.SetLastReadRegister( reg );
             }
             else
             {
-                if( mTran.reg == SWDRegisters::SWDR_DP_RDBUFF )
+                if( reg == SWDRegisters::SWDR_DP_RDBUFF )
                 {
-                    mTran.lastRegister = SWDRegisters::SWDR_UNDEFINED;
+                    adiState.SetLastReadRegister( SWDRegisters::SWDR_UNDEFINED );
                 }
             }
         }
         else
         {
-            mTran.lastRegister = SWDRegisters::SWDR_UNDEFINED;
+            adiState.SetLastReadRegister( SWDRegisters::SWDR_UNDEFINED );
         }
+    }
+    if( ( reqAck == 0u ) || ( ( reqAck & ( reqAck - 1u ) ) != 0u ) )
+    {
+        // Set current protocol to unknown if ACK is invalid
+        adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_UNKNOWN );
     }
     else
     {
-        mCurrentProtocol = DebugProtocol::DPROTOCOL_UNKNOWN;
+        // Set current protocol to SWD if ACK is valid
+        adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_SWD );
     }
 }
 
-void SWDParser::CapureApRegData( SWDRegisters reg )
+void SWDOperation::CapureApRegData( SWDRegisters reg )
 {
     switch( reg )
     {
     case SWDRegisters::SWDR_AP_CSW:
         // Capture address auto-increment and packing mode, MEM-AP access size
-        mTran.SetAddrInc( ( mTran.data >> 4u ) & 0x03u );
-        mTran.SetDataSize( mTran.data & 0x07u );
+        adiState.SetAddrInc( ( data >> 4u ) & 0x03u );
+        adiState.SetDataSize( data & 0x07u );
         break;
     case SWDRegisters::SWDR_AP_TAR:
         // Capture TAR, Transfer Address Register
-        mTran.tar = mTran.data;
+        adiState.SetTar( data );
         break;
     case SWDRegisters::SWDR_AP_DRW:
         // Increment TAR per CSW.AddrInc
-        mTran.IncrementTar();
+        adiState.IncrementTar();
         break;
     default:
         break;
     }
 }
 
-void SWDParser::SetIdleCycles()
+void SWDOperation::CaptureNewSequence( const std::deque<SWDBit>& bits )
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_IDLE_CYCLE;
-}
-void SWDParser::SetJtagTlr()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_JTAG_TLR;
-}
-void SWDParser::SetJtagToDs()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_JTAG_TO_DS;
-    mCurrentProtocol = DebugProtocol::DPROTOCOL_DORMANT;
-}
-void SWDParser::SetSwdToDs()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_SWD_TO_DS;
-    mCurrentProtocol = DebugProtocol::DPROTOCOL_DORMANT;
-}
-void SWDParser::SetDsSelectionAlertPreamble()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_DS_SEL_ALERT_PREAMBLE;
-}
-void SWDParser::SetDsSelectionAlert()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_DS_SEL_ALERT;
-}
-void SWDParser::SetDsActivationCodePreamble()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE;
-}
-void SWDParser::SetDsActivationCode()
-{
-    mLastFrameType = SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE;
-    switch(mDsActivationCode.data)
-    {
-        case SEQUENCE_JTAG_SERIAL:
-        case SEQUENCE_JTAG_DP:
-            mCurrentProtocol = DebugProtocol::DPROTOCOL_JTAG;
-            break;
-        case SEQUENCE_SW_DP:
-            mCurrentProtocol = DebugProtocol::DPROTOCOL_SWD;
-            break;
-        default:
-            mCurrentProtocol = DebugProtocol::DPROTOCOL_UNKNOWN;
-            break;
-    }
+    SWDBaseSequence::CaptureNewSequence( bits );
+    const std::size_t turnaroundNumber = adiState.GetTurnaroundNumber();
+    const std::size_t turnaroundNumberIdx = turnaroundNumber - 1u;
+    opReqAndAckItemSize = &( OP_REQ_AND_ACK_SIZE.at( turnaroundNumberIdx ) );
+    opRdataItemSize = &( OP_RDATA_SIZE.at( turnaroundNumberIdx ) );
+    opWdataItemSize = &( OP_WDATA_SIZE.at( turnaroundNumberIdx ) );
+    opAckOffset = static_cast<std::size_t>( OpItemSize::OP_REQUEST_SIZE ) + turnaroundNumber;
+    opReqAndAckSize = opAckOffset + static_cast<std::size_t>( OpItemSize::OP_ACK_SIZE );
 }
 
-void SWDParser::SetErrorBits()
+
+void JTAGToDS::UpdateAdiState()
 {
-    mLastFrameType = SwdFrameTypes::SWD_FT_ERROR;
+    SWDBaseSequence::UpdateAdiState();
+    adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_DORMANT );
+}
+void SWDToDS::UpdateAdiState()
+{
+    SWDBaseSequence::UpdateAdiState();
+    adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_DORMANT );
+}
+void DSActivationCode::UpdateAdiState()
+{
+    SWDBaseSequence::UpdateAdiState();
+    if( ( resultIdx == ActivationCodeID::ACTIVATION_CODE_1 ) || ( resultIdx == ActivationCodeID::ACTIVATION_CODE_3 ) )
+	{
+		adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_JTAG );
+	}
+    else if( resultIdx == ActivationCodeID::ACTIVATION_CODE_2 )
+	{
+		adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_SWD );
+	}
+	else
+	{
+		adiState.SetCurrentProtocol( DebugProtocol::DPROTOCOL_UNKNOWN );
+	}
 }
 
 SWDBit SWDParser::PopFrontBit()
@@ -2152,8 +2071,94 @@ SWDBit SWDParser::PopFrontBit()
     SWDBit retVal( mBitsBuffer.front() );
 
     // shift the elements by 1
-    std::copy( mBitsBuffer.begin() + 1, mBitsBuffer.end(), mBitsBuffer.begin() );
-    mBitsBuffer.pop_back();
+    mBitsBuffer.pop_front();
 
     return retVal;
 }
+
+void ADIState::SetIgnoreAck( bool ignoreAck )
+{
+    mIgnoreAck = ignoreAck;
+}
+
+bool ADIState::GetIgnoreAck() const
+{
+    return mIgnoreAck;
+}
+
+void ADIState::SetDPVersion( DPVersion version )
+{
+	mDPVersion = version;
+}
+
+DPVersion ADIState::GetDPVersion() const
+{
+    return mDPVersion;
+}
+
+void ADIState::SetRegister( SWDRegisters reg )
+{
+    mRegister = reg;
+}
+
+SWDRegisters ADIState::GetRegister() const
+{
+    return mRegister;
+}
+
+void ADIState::SetTurnaroundNumber( U8 num )
+{
+    mTurnaroundNumber = num;
+}
+
+U8 ADIState::GetTurnaroundNumber() const
+{
+    return mTurnaroundNumber;
+}
+
+void ADIState::SetOverrunDetection( bool enable )
+{
+    mOrundetection = enable;
+}
+
+bool ADIState::GetOverrunDetection() const
+{
+    return mOrundetection;
+}
+
+void ADIState::IncrementNumApReads()
+{
+    ++mNumApReads;
+}
+
+void ADIState::ClearNumApReads()
+{
+	mNumApReads = 0u;
+}
+
+size_t ADIState::GetNumApReads() const
+{
+    return mNumApReads;
+}
+
+void ADIState::SetLastReadRegister( SWDRegisters reg )
+{
+    mLastReadRegister = reg;
+}
+
+SWDRegisters ADIState::GetLastReadRegister() const
+{
+    return mLastReadRegister;
+}
+
+void ADIState::SetTar( U32 tar )
+{
+	mTar = tar;
+}
+
+U32 ADIState::GetTar() const
+{
+    return mTar;
+}
+
+

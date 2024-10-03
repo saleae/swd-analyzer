@@ -75,7 +75,7 @@ void SWDAnalyzerResults::GetBubbleText( const Frame& f, DisplayBase displayBase,
     {
         case static_cast<U8>(SwdFrameTypes::SWD_FT_REQUEST):
             {
-                SWDRequestFrame& req( ( SWDRequestFrame& )f );
+                const SWDRequestFrame& req = static_cast<const SWDRequestFrame&>(f);
 
                 std::string regName( req.GetRegisterName() );
 
@@ -128,25 +128,25 @@ void SWDAnalyzerResults::GetBubbleText( const Frame& f, DisplayBase displayBase,
             }
             break;
         case static_cast<U8>(SwdFrameTypes::SWD_FT_JTAG_TO_SWD):
-            results.push_back( std::string( f.mFlags == 0 ? "" : "Deprecated " ) + "JTAG to SWD sequence " +
+            results.push_back( std::string( f.mFlags == 0u ? "" : "Deprecated " ) + "JTAG to SWD sequence " +
                            Int2StrSal( f.mData1, displayBase, 16 ) );
             if( !onlyFirstResult )
             {
-                results.push_back( std::string( f.mFlags == 0 ? "" : "Deprecated " ) + "JTAG to SWD " +
+                results.push_back( std::string( f.mFlags == 0u ? "" : "Deprecated " ) + "JTAG to SWD " +
                                    Int2StrSal( f.mData1, displayBase, 16 ) );
-                results.push_back( std::string( f.mFlags == 0 ? "" : "Depr" ) + "JTAGtoSWD" );
-                results.push_back( std::string( f.mFlags == 0 ? "" : "D" ) + "JtS" );
+                results.push_back( std::string( f.mFlags == 0u ? "" : "Depr" ) + "JTAGtoSWD" );
+                results.push_back( std::string( f.mFlags == 0u ? "" : "D" ) + "JtS" );
             }
             break;
         case static_cast<U8>(SwdFrameTypes::SWD_FT_SWD_TO_JTAG):
-            results.push_back( std::string( f.mFlags == 0 ? "" : "Deprecated " ) + "SWD to JTAG sequence " +
+            results.push_back( std::string( f.mFlags == 0u ? "" : "Deprecated " ) + "SWD to JTAG sequence " +
                            Int2StrSal( f.mData1, displayBase, 16 ) );
             if( !onlyFirstResult )
             {
-                results.push_back( std::string( f.mFlags == 0 ? "" : "Deprecated " ) + "SWD to JTAG " +
+                results.push_back( std::string( f.mFlags == 0u ? "" : "Deprecated " ) + "SWD to JTAG " +
                                    Int2StrSal( f.mData1, displayBase, 16 ) );
-                results.push_back( std::string( f.mFlags == 0 ? "" : "Depr" ) + "SWDtoJTAG" );
-                results.push_back( std::string( f.mFlags == 0 ? "" : "D" ) + "StJ" );
+                results.push_back( std::string( f.mFlags == 0u ? "" : "Depr" ) + "SWDtoJTAG" );
+                results.push_back( std::string( f.mFlags == 0u ? "" : "D" ) + "StJ" );
             }
             break;
         case static_cast<U8>(SwdFrameTypes::SWD_FT_TURNAROUND):

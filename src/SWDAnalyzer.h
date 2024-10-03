@@ -41,16 +41,12 @@ class SWDAnalyzer : public Analyzer2
 
     bool mSimulationInitilized;
 
-    struct SWDSequenceCondition
-    {
-        std::set<DebugProtocol> protocols;
-        std::set<SwdFrameTypes> previousFrames;
-        bool ( SWDParser::*CompareFn )();
-        SWDBaseSequnce& ( SWDParser::*GetSequence )();
-        void ( SWDParser::*UpdateStatus )();
-    };
-
-    static const std::vector<SWDSequenceCondition> SEQUENCE_CONDITIONS;
+    // Sequence matching results
+    SeqCmpResult bestFixedLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+    SeqCmpResult bestVariableLengthCmpResult = SeqCmpResult::SEQ_UNKNOWN;
+    std::size_t bestPartialyMatched = 0u;
+    std::size_t bestCompleteMatched = 0u;
+    void ClearBestMatchingResults();
 };
 
 extern "C" ANALYZER_EXPORT const char* __cdecl GetAnalyzerName();

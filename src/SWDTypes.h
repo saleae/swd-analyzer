@@ -53,8 +53,8 @@ class SWDFrame
     static const std::map<SwdFrameTypes, std::string> FRAMEV2_NAMES;
 
   public:
-    static const std::string GetSwdFrameName( SwdFrameTypes frame );
-    static const std::string GetSwdFrameV2Name( SwdFrameTypes frame );
+    static const std::string& GetSwdFrameName( SwdFrameTypes frame );
+    static const std::string& GetSwdFrameV2Name( SwdFrameTypes frame );
 };
 
 // Version of the DP architecture implemented
@@ -396,12 +396,14 @@ enum class SWDRegisters : U16
 };
 
 // some ACK values
-enum class SWDAcks
+enum class SWDAcks : U8
 {
     ACK_OK = 1,
     ACK_WAIT = 2,
     ACK_FAULT = 4
 };
+bool operator==( const U8 a, const SWDAcks b );
+bool operator!=( const U8 a, const SWDAcks b );
 
 // Address auto-increment and packing mode field of CSW register
 enum class CswAddrInc : U8
@@ -436,6 +438,37 @@ enum class RegMask : U8
 U8 operator|( const RegMask a, const RegMask b );
 U8 operator|( const U8 a, const RegMask b );
 
+enum class SeqCmpResult : U8
+{
+    SEQ_UNKNOWN = 0u,
+    SEQ_MISMATCH = 1u,
+    SEQ_MATCH_PARTIALLY = 2u,
+    SEQ_MATCH_COMPLETELY = 3u
+};
+SeqCmpResult BestMach( const SeqCmpResult a, const SeqCmpResult b );
+
+enum class OpItemSize : U8
+{
+    OP_REQUEST_SIZE = 8u,
+    OP_1_TURNAROUND_SIZE = 1u,
+    OP_2_TURNAROUND_SIZE = 2u,
+    OP_3_TURNAROUND_SIZE = 3u,
+    OP_4_TURNAROUND_SIZE = 4u,
+    OP_ACK_SIZE = 3u,
+    OP_DATA_SIZE = 32u,
+    OP_DATA_PARITY_SIZE = 1u
+};
+
+enum class OpBitRange : U8
+{
+    OP_UNDEFINED_RANGE,
+    OP_REQUEST_RANGE,
+    OP_TURNAROUND_RANGE,
+    OP_ACK_RANGE,
+    OP_DATA_RANGE,
+    OP_DATA_PARITY_RANGE
+};
+
 // this is the basic token of the analyzer
 // objects of this type are buffered in SWDOperation
 struct SWDBit
@@ -453,11 +486,26 @@ struct SWDBit
     S64 GetMinStartEnd() const;
     S64 GetStartSample() const;
     S64 GetEndSample() const;
-
-    Frame MakeFrame() const;
-    Frame MakeFrame( const S64 startingSampleInclusive, const S64 endingSampleInclusive, const U64 data1, const U64 data2, const U8 type,
-                     const U8 flags ) const;
 };
+
+// Function template to get the byte of any value
+template <typename T, std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
+constexpr U8 GetByteOf( const T value, const std::size_t byteNr )
+{
+    return ( value >> ( 8u * byteNr ) ) & 0xFFu;
+}
+
+// Function template for little endian serialization to U8 vector
+template <typename T, std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
+std::vector<U8> ToVectorU8( const T value )
+{
+    std::vector<U8> vector( sizeof( T ) );
+    for( std::size_t i = 0u; i < sizeof( T ); ++i )
+    {
+        vector[ i ] = GetByteOf( value, i );
+    }
+    return vector;
+}
 
 class SWDRequestByte
 {
@@ -465,10 +513,6 @@ class SWDRequestByte
 
     public:
     explicit SWDRequestByte( const U8 byteValue );
-    bool IsByteValid() const;
-    bool GetAPnDP() const;
-    bool GetRnW() const;
-    U8 GetAddr() const; // A[2..3]
 };
 
 union SWDRegistersUnion
@@ -487,48 +531,106 @@ union SWDRegistersUnion
     } reg;
 };
 
-struct SWDBaseSequnce
+template <typename T, std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
+class UintSequence
 {
-    std::deque<SWDBit> bits;
+    const std::vector<T>& sequence;
+    const std::size_t bitCount;
+    S64 startSample = 0;
+    std::size_t numberCheckedBits = 0u;
+    SeqCmpResult seqCheckResult = SeqCmpResult::SEQ_UNKNOWN;
+    void Clear()
+    {
+        startSample = 0;
+        numberCheckedBits = 0u;
+        seqCheckResult = SeqCmpResult::SEQ_UNKNOWN;
+    }
 
-    virtual void Clear();
-    virtual void AddFrames( SWDAnalyzerResults* pResults );
-    virtual void AddMarkers( SWDAnalyzerResults* pResults ) const;
+  public:
+
+    explicit UintSequence( const std::vector<T>& seq )
+        : sequence( seq ), bitCount( seq.size() * sizeof( T ) * 8u ), startSample( 0 ), numberCheckedBits( 0u ), seqCheckResult( SeqCmpResult::SEQ_UNKNOWN ) { }
+    UintSequence( const std::vector<T>& seq, const std::size_t bitCount )
+        : sequence( seq ), bitCount( bitCount ), startSample( 0 ), numberCheckedBits( 0u ), seqCheckResult( SeqCmpResult::SEQ_UNKNOWN ) { }
+    SeqCmpResult Match( const std::deque<SWDBit>& bits, const std::size_t startOffset = 0u ) // startOffset is the offset from the start of the bits buffer
+    {
+        if( bits.size() <= startOffset )
+        {
+            // Nothing to compare
+            seqCheckResult = SeqCmpResult::SEQ_UNKNOWN;
+        }
+        else
+        {
+            auto bitsStartSample = bits.at( startOffset ).GetStartSample();
+            if( bitsStartSample != startSample )
+            {
+                // New secuence detected
+                Clear(); // Clear the bits
+                startSample = bitsStartSample;
+            }
+            if( ( numberCheckedBits != 0u ) &&
+                ( ( seqCheckResult == SeqCmpResult::SEQ_MISMATCH ) || ( seqCheckResult == SeqCmpResult::SEQ_MATCH_COMPLETELY ) ) )
+            {
+                // The previously checked bits did not match or match cmpletely, so there is no point in comparing the next bits.
+                return seqCheckResult;
+            }
+            for( ; ( ( startOffset + numberCheckedBits ) < bits.size() ) && ( numberCheckedBits < bitCount ) &&
+                   ( seqCheckResult != SeqCmpResult::SEQ_MISMATCH );
+                 ++numberCheckedBits )
+            {
+                std::size_t itemIdx = numberCheckedBits / ( sizeof( T ) * 8u );
+                std::size_t bitShift = numberCheckedBits % ( sizeof( T ) * 8u );
+                if( bits[ startOffset + numberCheckedBits ].IsHigh() == ( ( ( sequence[ itemIdx ] >> bitShift ) & 0b1u ) == 0b1u ) )
+                {
+                    if( numberCheckedBits == 0u )
+                    {
+                        // The first bit
+                        seqCheckResult = SeqCmpResult::SEQ_MATCH_PARTIALLY;
+                    }
+                }
+                else
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+            }
+            if( ( numberCheckedBits == bitCount ) && ( seqCheckResult == SeqCmpResult::SEQ_MATCH_PARTIALLY ) )
+            {
+                seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+            }
+        }
+        return seqCheckResult;
+    }
+    std::size_t GetBitCount() const
+	{
+		return bitCount;
+	}
+    const T& GetItem( const std::size_t idx ) const
+	{
+		return sequence[ idx ];
+	}
+	const std::size_t GetNumberCheckedBits() const
+	{
+		return numberCheckedBits;
+	}
 };
 
-// this object contains data about one SWD operation as described in section 5.3
-// of the ARM Debug Interface v5 Architecture Specification
-struct SWDOperation : SWDBaseSequnce
+// This class holds current ADI state
+class ADIState
 {
-    // request
-    bool reqAPnDP = false;
-    bool reqRnW = true;
-    U8 addr = 0u; // A[2..3]
-    U8 parityRead = 0u;
-    U8 requestByte = 0u; // the entire request byte
-    // acknowledge
-    U8 reqAck = 0u;
-    // data
-    U32 data = 0u;
-    U8 dataParity = 0u;
-    bool dataParityOk = true;
-    // DebugPort or AccessPort register that this operation is reading/writing
-    DPVersion dpVer = DPVersion::DP_V0;
-    SWDRegisters reg = SWDRegisters::SWDR_UNDEFINED;
-    // Number of turnaround tristate period. Allowed range 1..4
-    U8 turnaround = 1u;
-    // Overrun detection
-    bool orundetect = false;
-    // Number of Continuous AP Reads
-    size_t numApReads = 0;
-    // The register that was used in the previous AP read operation.
-    SWDRegisters lastRegister = SWDRegisters::SWDR_UNDEFINED;
-    // Address auto-increment and packing mode
-    CswAddrInc addrInc = CswAddrInc::CSW_ADDRINC_DISABLED;
-    // MEM-AP access size
-    CswSize dataSize = CswSize::CSW_SIZE_32_BIT;
-    // TAR 
-    U32 tar = 0;
+    bool mIgnoreAck = false;                                        // Whether to ignore the ACK bits in the SWD operation
+    SWDRegisters mRegister = SWDRegisters::SWDR_UNDEFINED;          // DebugPort or AccessPort register that this operation is reading/writing
+    size_t mNumApReads = 0u;                                        // Number of Continuous AP Reads
+    SWDRegisters mLastReadRegister = SWDRegisters::SWDR_UNDEFINED;  // The register that was used in the previous AP read operation.
+    CswAddrInc mCswAddrInc = CswAddrInc::CSW_ADDRINC_DISABLED;      // Address auto-increment and packing mode field of CSW register
+    CswSize mCswDataSize = CswSize::CSW_SIZE_32_BIT;                // MEM-AP access size
+    U32 mTar = 0u;  											    // The value of the AP.TAR register
+    // Customizable parser initial values
+    DebugProtocol mCurrentProtocol = DebugProtocol::DPROTOCOL_UNKNOWN; // The current Debug Protocol
+    SwdFrameTypes mLastFrameType = SwdFrameTypes::SWD_FT_LINE_RESET;   // The last frame type
+    DPVersion mDPVersion = DPVersion::DP_V0;                           // The version of the DP architecture implemented
+    U8 mTurnaroundNumber = 1u;                                         // Number of turnaround tristate period. Allowed range 1..4
+    bool mOrundetection = false;                                       // Overrun detection as per the CTRL/STAT.STICKYORUN flag 
+    U32 mSelect = 0u;                                                  // The value of the DP.SELECT register 
 
     struct DPRegister
     {
@@ -541,114 +643,503 @@ struct SWDOperation : SWDBaseSequnce
     static const std::map<U8, SWDRegisters> MEM_AP_ADI_V5;
     static const std::map<U16, SWDRegisters> MEM_AP_ADI_V6;
 
+  public:
+
+    void SetIgnoreAck( bool ignoreAck );
+    bool GetIgnoreAck() const;
+    void SetDPVersion( DPVersion version );
+    DPVersion GetDPVersion() const;
+    void SetRegister( SWDRegisters reg );
+    SWDRegisters GetRegister() const;
+    void SetTurnaroundNumber( U8 num );
+    U8 GetTurnaroundNumber() const;
+    void SetOverrunDetection( bool enable );
+    bool GetOverrunDetection() const;
+    void IncrementNumApReads();
+    void ClearNumApReads();
+    size_t GetNumApReads() const;
+    void SetLastReadRegister( SWDRegisters reg );
+    SWDRegisters GetLastReadRegister() const;
+    void SetTar( U32 tar );
+    U32 GetTar() const;
+    void DetermineRegister( bool reqAPnDP, bool reqRnW, U8 reqA23Addr );
+    void SetAddrInc( U8 num );
+    void SetDataSize( U8 num );
+    void IncrementTar();
+    void SetSelect( U32 select );
+    U32 GetSelect() const;
+    void SetCurrentProtocol( DebugProtocol protocol );
+    DebugProtocol GetCurrentProtocol() const;
+    void SetLastFrameType( SwdFrameTypes frameType );
+    SwdFrameTypes GetLastFrameType() const;
+};
+
+class SWDBaseSequence
+{
+  private:
+    // Sequence conditions
+    const std::set<DebugProtocol> allowedDebugProtocols;
+    const std::set<SwdFrameTypes> allowedPreviousFrames; // If empty, it means all types of previous frames are allowed
+
+  protected:
+    // Internal variables
+    const SwdFrameTypes seqFrameType; // The frame type of the sequence
+    std::deque<SWDBit> bits;          // Sequence bits
+    S64 startSample;
+    S64 endSample;
+    std::size_t numberCheckedBits;
+    SeqCmpResult seqCheckResult;
+    ADIState& adiState;
+
+    virtual void UpdateBitInfo();
+    bool BreakMatch( const std::deque<SWDBit>& bits );
+    virtual void CaptureNewSequence( const std::deque<SWDBit>& bits );
+    void AddFrame( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive, const S64 endingSampleInclusive, const U64 data1,
+                   const U64 data2, const SwdFrameTypes type, const U8 flags ) const;
+    void AddFrameV2SimpleSequence( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive, const S64 endingSampleInclusive,
+                                   const SwdFrameTypes frameType, const std::size_t bitCount ) const;
+    void AddFrameV2DataSequence( SWDAnalyzerResults* pResults, const S64 startingSampleInclusive, const S64 endingSampleInclusive,
+                                   const SwdFrameTypes frameType, const std::size_t bitCount, const std::vector<U8>& bytes ) const;
+
+  public:
+    explicit SWDBaseSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                              const std::set<SwdFrameTypes>& previousFrames,
+                             ADIState& adiStateRef );
+
+    const std::size_t GetNumberCheckedBits() const;
+    const bool Empty() const;
+    virtual void Clear();
+    virtual void AddFrames( SWDAnalyzerResults* pResults ) = 0;
+    virtual void AddMarkers( SWDAnalyzerResults* pResults ) const;
+    virtual SeqCmpResult Match( const std::deque<SWDBit>& bits ) = 0;
+    virtual bool IsFixedLengthSequence() const = 0;
+    const bool IsDebugProtocolAllowed( DebugProtocol protocol ) const;
+    const bool IsPreviousFrameTypeAllowed( SwdFrameTypes frameType ) const;
+    virtual void UpdateAdiState();
+    void CopyBits( std::deque<SWDBit>& srcBits );
+};
+
+class SWDFixedLengthSequence : public SWDBaseSequence
+{
+  public:
+    explicit SWDFixedLengthSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                                     const std::set<SwdFrameTypes>& previousFrames,
+                                      ADIState& adiStateRef );
+    bool IsFixedLengthSequence() const override { return true; };
+};
+
+template <typename T1, typename T2, std::enable_if_t<std::is_unsigned<T1>::value && std::is_unsigned<T2>::value, bool> = true>
+class SwitchSequenceWithDeprecate : public SWDFixedLengthSequence
+{
+  private:
+    UintSequence<T1>& sequence;
+    UintSequence<T2>& sequenceDeprecated;
+
+  protected:
+    bool deprecated; // Deprecated flag
+
+  public:
+    // mFlag
+    enum class SQ_FLAG : U8
+    {
+        IS_NONE = 0u,
+        IS_DEPRECATED = 1u
+    };
+    explicit SwitchSequenceWithDeprecate( const SwdFrameTypes frameType, ADIState& adiStateRef, UintSequence<T1>& sequenceRef,
+                                          UintSequence<T2>& sequenceDeprecatedRef )
+        : SWDFixedLengthSequence( frameType,
+                                  { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_SWD, DebugProtocol::DPROTOCOL_JTAG },
+                                  { SwdFrameTypes::SWD_FT_LINE_RESET }, adiStateRef ),
+          sequence( sequenceRef ),
+          sequenceDeprecated( sequenceDeprecatedRef ),
+          deprecated( false )
+    {
+    }
+    void Clear() override
+    {
+        SWDFixedLengthSequence::Clear();
+        deprecated = false;
+    }
+    SeqCmpResult Match( const std::deque<SWDBit>& bits ) override
+    {
+        if( BreakMatch( bits ) )
+        {
+            return seqCheckResult;
+        }
+        const SeqCmpResult cmpResult = sequence.Match( bits );
+        const SeqCmpResult cmpResultDeprecated = sequenceDeprecated.Match( bits );
+        seqCheckResult = BestMach( cmpResult, cmpResultDeprecated );
+        numberCheckedBits = ( seqCheckResult == cmpResult ) ? sequence.GetNumberCheckedBits() : sequenceDeprecated.GetNumberCheckedBits();
+        if( seqCheckResult == SeqCmpResult::SEQ_MATCH_COMPLETELY )
+        {
+            deprecated = ( seqCheckResult == cmpResultDeprecated );
+        }
+        return seqCheckResult;
+    }
+    typename std::common_type<T1, T2>::type GetData() const
+	{
+        return ( !deprecated ) ? sequence.GetItem( 0u ) : sequenceDeprecated.GetItem( 0u );
+	}
+    void AddFrames( SWDAnalyzerResults* pResults ) override
+    {
+        // Legacy Frame
+        auto data = GetData();
+        AddFrame( pResults, startSample, endSample, data, 0u, seqFrameType,
+                  static_cast<U8>( deprecated ? SwitchSequenceWithDeprecate::SQ_FLAG::IS_DEPRECATED
+                                              : SwitchSequenceWithDeprecate::SQ_FLAG::IS_NONE ) );
+
+        // FrameV2
+        std::vector<U8> bytes = ToVectorU8( data );
+        AddFrameV2DataSequence( pResults, startSample, endSample, seqFrameType, numberCheckedBits, bytes );
+    }
+};
+
+
+template <typename T1, typename T2, typename T3,
+          std::enable_if_t<std::is_unsigned<T1>::value && std::is_unsigned<T2>::value && std::is_unsigned<T3>::value, bool> = true>
+class SwitchSequenceActivationCode : public SWDFixedLengthSequence
+{
+  private:
+    UintSequence<T1>& sequenceActivationCode1;
+    UintSequence<T2>& sequenceActivationCode2;
+    UintSequence<T3>& sequenceActivationCode3;
+
+  protected:
+    enum class ActivationCodeID : U8
+    {
+        ACTIVATION_CODE_1 = 0u,
+        ACTIVATION_CODE_2 = 1u,
+        ACTIVATION_CODE_3 = 2u
+    };
+    ActivationCodeID resultIdx;
+
+  public:
+    explicit SwitchSequenceActivationCode( const SwdFrameTypes frameType, ADIState& adiStateRef, UintSequence<T1>& activationCode1Ref,
+                                           UintSequence<T2>& activationCode2Ref, UintSequence<T3>& activationCode3Ref )
+        : SWDFixedLengthSequence( frameType, { DebugProtocol::DPROTOCOL_UNKNOWN, DebugProtocol::DPROTOCOL_DORMANT },
+                                  { SwdFrameTypes::SWD_FT_DS_ACTIVATION_CODE_PREAMBLE }, adiStateRef ),
+          sequenceActivationCode1( activationCode1Ref ),
+          sequenceActivationCode2( activationCode2Ref ),
+          sequenceActivationCode3( activationCode3Ref ),
+          resultIdx( ActivationCodeID::ACTIVATION_CODE_1 )
+    {
+    }
+    void Clear() override
+	{
+		SWDFixedLengthSequence::Clear();
+		resultIdx = ActivationCodeID::ACTIVATION_CODE_1;
+	}
+    SeqCmpResult Match( const std::deque<SWDBit>& bits ) override
+    {
+        if( BreakMatch( bits ) )
+        {
+            return seqCheckResult;
+        }
+        const SeqCmpResult activationCode1Result = sequenceActivationCode1.Match( bits );
+        const SeqCmpResult activationCode2Result = sequenceActivationCode2.Match( bits );
+        const SeqCmpResult activationCode3Result = sequenceActivationCode3.Match( bits );
+        seqCheckResult = BestMach( activationCode1Result, activationCode2Result );
+        seqCheckResult = BestMach( seqCheckResult, activationCode3Result );
+        if( seqCheckResult == activationCode1Result )
+        {
+            numberCheckedBits = sequenceActivationCode1.GetNumberCheckedBits();
+            resultIdx = ActivationCodeID::ACTIVATION_CODE_1;
+        }
+        else if( seqCheckResult == activationCode2Result )
+        {
+            numberCheckedBits = sequenceActivationCode2.GetNumberCheckedBits();
+            resultIdx = ActivationCodeID::ACTIVATION_CODE_2;
+        }
+        else
+        {
+            numberCheckedBits = sequenceActivationCode3.GetNumberCheckedBits();
+            resultIdx = ActivationCodeID::ACTIVATION_CODE_3;
+        }
+        return seqCheckResult;
+    }
+    typename std::common_type<T1, T2, T3>::type GetData() const
+    {
+        if( resultIdx == ActivationCodeID::ACTIVATION_CODE_1 )
+        {
+            return sequenceActivationCode1.GetItem( 0u );
+        }
+        else if( resultIdx == ActivationCodeID::ACTIVATION_CODE_2 )
+        {
+            return sequenceActivationCode2.GetItem( 0u );
+        }
+        else
+        {
+            return sequenceActivationCode3.GetItem( 0u );
+        }
+    }
+};
+
+template <typename T, std::enable_if_t<std::is_unsigned<T>::value, bool> = true>
+class SwitchSequence : public SWDFixedLengthSequence
+{
+  private:
+    UintSequence<T>& sequence;
+
+  public:
+    explicit SwitchSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                             const std::set<SwdFrameTypes>& previousFrames, ADIState& adiStateRef, UintSequence<T>& sequenceRef )
+        : SWDFixedLengthSequence( frameType, debugProtocols, previousFrames, adiStateRef ), sequence( sequenceRef )
+    {
+    }
+	SeqCmpResult Match( const std::deque<SWDBit>& bits ) override
+	{
+		if( BreakMatch( bits ) )
+		{
+			return seqCheckResult;
+		}
+		seqCheckResult = sequence.Match( bits );
+		numberCheckedBits = sequence.GetNumberCheckedBits();
+		return seqCheckResult;
+	}
+    T GetData(std::size_t idx = 0u) const
+	{
+        return sequence.GetItem( idx );
+	}
+    void AddFrames( SWDAnalyzerResults* pResults ) override
+    {
+        // Legacy Frame
+        auto data = GetData();
+        AddFrame( pResults, startSample, endSample, data, 0u, seqFrameType, 0u );
+
+        // FrameV2
+        std::vector<U8> bytes = ToVectorU8( data );
+        AddFrameV2DataSequence( pResults, startSample, endSample, seqFrameType, numberCheckedBits, bytes );
+    }
+};
+
+class SWDVariableLengthSequence : public SWDBaseSequence
+{
+  protected:
+    size_t bitCount;
+
+  public:
+    explicit SWDVariableLengthSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                                        const std::set<SwdFrameTypes>& previousFrames,
+                                         ADIState& adiStateRef );
+    void UpdateBitInfo() override;
+    bool IsFixedLengthSequence() const override { return false; };
+};
+
+class PlainBitSequence : public SWDVariableLengthSequence
+{
+  private:
+    const bool bitHigh;               // The bit value
+    const size_t minimumBitCnt; // The minimum number of bits in the sequence
+
+  public:
+    explicit PlainBitSequence( const SwdFrameTypes frameType, const std::set<DebugProtocol>& debugProtocols,
+                               const std::set<SwdFrameTypes>& previousFrames,
+                               ADIState& adiStateRef, const bool bitInHigh, const std::size_t requiredBitCnt )
+        : SWDVariableLengthSequence( frameType, debugProtocols, previousFrames, adiStateRef ), bitHigh( bitInHigh ), minimumBitCnt( requiredBitCnt )
+    { }
+	SeqCmpResult Match( const std::deque<SWDBit>& bits ) override
+    {
+        if( BreakMatch( bits ) )
+        {
+            return seqCheckResult;
+        }
+        // Loop through the unchecked bits.
+        for( ; ( numberCheckedBits < bits.size() ) && ( seqCheckResult != SeqCmpResult::SEQ_MISMATCH ); ++numberCheckedBits )
+        {
+            if( bits[ numberCheckedBits ].IsHigh() == bitHigh )
+            {
+                if( numberCheckedBits == 0u )
+                {
+                    // The first bit
+                    seqCheckResult = SeqCmpResult::SEQ_MATCH_PARTIALLY;
+                }
+            }
+            else
+            {
+                if( numberCheckedBits >= minimumBitCnt )
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MATCH_COMPLETELY;
+                    break;
+                }
+                else
+                {
+                    seqCheckResult = SeqCmpResult::SEQ_MISMATCH;
+                }
+            }
+        }
+        return seqCheckResult;
+    }
+};
+
+// this object contains data about one SWD operation as described in section 5.3
+// of the ARM Debug Interface v5 Architecture Specification
+class SWDOperation : public SWDFixedLengthSequence
+{
+    // request
+    bool reqAPnDP;  // APnDP
+    bool reqRnW;    // RnW
+    U8 reqA23Addr;  // A[2:3]
+    U8 reqParity;   // Number of bits with a value of 0b1 in  bits APnDP, RnW and A[2:3]:
+    U8 reqByte;     // the entire request byte
+    // acknowledge
+    U8 reqAck;	    // ACK
+    // data
+    U32 data;	    // RDATA or WDATA
+    U8 calculatedDataParity; // The calculated parity of the data
+    U8 dataParity;  // DATA parity
+    bool dataParityOk; // Is the calculated parity matches DATA parity
+
+
+    static const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> OP_REQ_AND_ACK_SIZE;
+    static const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> OP_RDATA_SIZE;
+    static const std::vector<std::vector<std::pair<OpBitRange, OpItemSize>>> OP_WDATA_SIZE;
+    const std::vector<std::pair<OpBitRange, OpItemSize>>* opReqAndAckItemSize;
+    const std::vector<std::pair<OpBitRange, OpItemSize>>* opRdataItemSize;
+    const std::vector<std::pair<OpBitRange, OpItemSize>>* opWdataItemSize;
+    std::size_t opReqAndAckSize;
+    std::size_t opAckOffset;
+    std::size_t opDataOffset;
+
+    enum class OP_REQUEST_BIT : U8
+    {
+        OP_REQ_START = 0u,
+        OP_REQ_AP_N_DP = 1u,
+        OP_REQ_R_N_W = 2u,
+        OP_REQ_A2 = 3u,
+        OP_REQ_A3 = 4u,
+        OP_REQ_PARITY = 5u,
+        OP_REQ_STOP = 6u,
+        OP_REQ_PARK = 7u
+    };
+
+    OpBitRange GetOpBitRange( const std::vector<std::pair<OpBitRange, OpItemSize>>* opItemSize, const std::size_t bitIdx ) const;
+    std::size_t GetOpBitRangeFirstBitIdx( const std::size_t bitIdx ) const;
+    void GetAndParseOperationRequest( const std::deque<SWDBit>& bits );
+    void GetAndParseOperationTurnaround( const std::deque<SWDBit>& bits );
+    void GetAndParseOperationAck( const std::deque<SWDBit>& bits );
+    void GetAndParseOperationData( const std::deque<SWDBit>& bits );
+    void GetAndParseOperationDataParity( const std::deque<SWDBit>& bits );
+    void CapureApRegData( SWDRegisters reg );
+
+  protected:
+	void CaptureNewSequence( const std::deque<SWDBit>& bits ) override; 
+
+  public:
+    explicit SWDOperation( ADIState& adiStateRef );
+
     void Clear() override;
     void AddFrames( SWDAnalyzerResults* pResults ) override;
     void AddMarkers( SWDAnalyzerResults* pResults ) const override;
-    void SetRegister( U32 selectReg );
-    void SetDPVer( DPVersion version );
-    void SetTurnaroundNumber( U8 num );
-    void SetOrunDetect( bool enable );
-    void SetAddrInc( U8 num );
-    void SetDataSize( U8 num );
-
-    bool IsRead() const;
-    bool IsAp() const;
-    size_t GetTurnaroundNumber() const;
-    bool GetOrunDetect() const;
-    void IncrementTar();
+    SeqCmpResult Match( const std::deque<SWDBit>& bits ) override;
+    void UpdateAdiState() override;
 };
 
-struct SWDLineReset : SWDBaseSequnce
+class SWDLineReset : public SWDVariableLengthSequence
 {
-    void AddFrames( SWDAnalyzerResults* pResults ) override;
-};
+    std::size_t firstLowBitOffset;
 
-struct JTAGToSWD : SWDBaseSequnce
-{
-    // Deprecated flag
-    bool deprecated = false;
-     // Detected sequence value
-    U16 data = 0u;
+  public:
+    explicit SWDLineReset( ADIState& adiStateRef );
 
     void Clear() override;
     void AddFrames( SWDAnalyzerResults* pResults ) override;
+    SeqCmpResult Match( const std::deque<SWDBit>& bits ) override;
+    void UpdateAdiState() override;
 };
 
-struct SWDToJTAG : SWDBaseSequnce
+class JTAGToSWD : public SwitchSequenceWithDeprecate<U16, U16>
 {
-    // Deprecated flag
-    bool deprecated = false;
-    // Detected sequence value
-    U16 data = 0u;
+  public:
+    explicit JTAGToSWD( ADIState& adiStateRef );
+
+    void UpdateAdiState() override;
+};
+
+class SWDToJTAG : public SwitchSequenceWithDeprecate<U16, U16>
+{
+  public:
+    explicit SWDToJTAG( ADIState& adiStateRef );
+
+    void UpdateAdiState() override;
+};
+
+class SWDErrorBits : public SWDVariableLengthSequence
+{
+    DebugProtocol protocol;
+
+  public:
+	explicit SWDErrorBits( ADIState& adiStateRef );
 
     void Clear() override;
     void AddFrames( SWDAnalyzerResults* pResults ) override;
-};
-
-struct SWDErrorBits : SWDBaseSequnce
-{
-    DebugProtocol protocol = DebugProtocol::DPROTOCOL_UNKNOWN;
-
-    void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) override;
-
+    SeqCmpResult Match( const std::deque<SWDBit>& bits ) override { return SeqCmpResult::SEQ_UNKNOWN; };
     void SetProtocol( const DebugProtocol newProtocol );
+    void PushBackBit( SWDBit&& bit );
 };
 
-struct SWDIdleCycles : SWDBaseSequnce
+class SWDIdleCycles : public PlainBitSequence
 {
+  public:
+    explicit SWDIdleCycles( ADIState& adiStateRef );
+
     void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
-struct JTAGTlr : SWDBaseSequnce
+class JTAGTlr : public PlainBitSequence
 {
+  public:
+    explicit JTAGTlr( ADIState& adiStateRef );
+
     void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
-struct JTAGToDS : SWDBaseSequnce
+class JTAGToDS : public SwitchSequence<U32>
 {
-    // Detected sequence value
-    U32 data = 0u;
+  public:
+    explicit JTAGToDS( ADIState& adiStateRef );
 
-    void Clear() override;
+    void UpdateAdiState() override;
+};
+
+class SWDToDS : public SwitchSequence<U16>
+{
+  public:
+    explicit SWDToDS( ADIState& adiStateRef );
+
+    void UpdateAdiState() override;
+};
+
+class DSSelectionAlertPreamble : public PlainBitSequence
+{
+  public:
+    explicit DSSelectionAlertPreamble( ADIState& adiStateRef );
+
     void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
-struct SWDToDS : SWDBaseSequnce
+class DSSelectionAlert : public SwitchSequence<U64>
 {
-    // Detected sequence value
-    U16 data = 0u;
-
-    void Clear() override;
+  public:
+    explicit DSSelectionAlert( ADIState& adiStateRef );
+        
     void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
-struct DSSelectionAlertPreamble : SWDBaseSequnce
+class DSActivationCodePreamble : public SwitchSequence<U8>
 {
+  public:
+    explicit DSActivationCodePreamble( ADIState& adiStateRef );
+
     void AddFrames( SWDAnalyzerResults* pResults ) override;
 };
 
-struct DSSelectionAlert : SWDBaseSequnce
+class DSActivationCode : public SwitchSequenceActivationCode<U16, U8, U8>
 {
-    U64 hi64BitData = 0u;
-    U64 lo64BitData = 0u;
+  public:
+    explicit DSActivationCode( ADIState& adiStateRef );
 
-    void Clear() override;
     void AddFrames( SWDAnalyzerResults* pResults ) override;
-};
-
-struct DSActivationCodePreamble : SWDBaseSequnce
-{
-    void AddFrames( SWDAnalyzerResults* pResults ) override;
-};
-
-struct DSActivationCode : SWDBaseSequnce
-{
-    // Detected sequence value
-    U16 data = 0u;
-
-    void Clear() override;
-    void AddFrames( SWDAnalyzerResults* pResults ) override;
+    void UpdateAdiState() override;
 };
 
 struct SWDRequestFrame : public Frame
@@ -658,15 +1149,13 @@ struct SWDRequestFrame : public Frame
     // mFlag
     enum class RQ_FLAG : U8
     {
+        IS_NONE = 0u,
         IS_READ = ( 1u << 0u ),
         IS_ACCESS_PORT = ( 1u << 1u ),
     };
 
-    void SetRequestByte( U8 requestByte );
-    U8 GetAddr() const;
     bool IsRead() const;
     bool IsAccessPort() const;
-    bool IsDebugPort() const;
     void SetRegister( SWDRegisters reg );
     SWDRegisters GetRegister() const;
     std::string GetRegisterName() const;
@@ -687,71 +1176,41 @@ class SWDParser
 
     std::deque<SWDBit> mBitsBuffer;
 
-    SwdFrameTypes mLastFrameType;
-    DebugProtocol mCurrentProtocol;
-    DPVersion mDPVersion;
+    ADIState mAdiState;
 
     // SWD sequence objects
-    SWDOperation mTran;
-    SWDLineReset mReset;
-    JTAGToSWD mJtagToSwd;
-    SWDToJTAG mSwdToJtag;
-    SWDErrorBits mErrorBits;
-    SWDIdleCycles mIdleCycles;
-    JTAGTlr mJtagTlr;
-    JTAGToDS mJtagToDs;
-    SWDToDS mSwdToDs;
-    DSSelectionAlertPreamble mDsSelectionAlertPreamble;
-    DSSelectionAlert mDsSelectionAlert;
-    DSActivationCodePreamble mDsActivationCodePreamble;
-    DSActivationCode mDsActivationCode;
+    SWDOperation mTran; // bit count >= 12 <= 46. SWD read/write transaction
+    SWDLineReset mReset;  // bit count > 50. SWD line reset. At least 50 SWCLKTCK cycles with SWDIOTMS HIGH.
+    JTAGToSWD mJtagToSwd; // bit count == 16. JTAG-to-SWD select sequence
+    SWDToJTAG mSwdToJtag; // bit count == 16. SWD-to-JTAG select sequence
+    SWDErrorBits mErrorBits; // bit count > 0. Error bits.
+    SWDIdleCycles mIdleCycles; // bit count > 1. SWD idle cycles. SWCLKTCK cycles with SWDIOTMS LOW
+    JTAGTlr mJtagTlr;   // bit count > 5. Enters to JTAG Test-Logic-Reset state
+    JTAGToDS mJtagToDs; // bit count == 31. JTAG-to-DS select sequence
+    SWDToDS mSwdToDs; // bit count == 16. SWD-to-DS select sequence
+    DSSelectionAlertPreamble mDsSelectionAlertPreamble; // bit count > 8. Selection Alert preamble. At least 8 SWCLKTCK cycles with SWDIOTMS HIGH.
+    DSSelectionAlert mDsSelectionAlert; // bit count == 128. Selection Alert sequence
+    DSActivationCodePreamble mDsActivationCodePreamble; // bit count == 4. Activation Code preamble. 4 SWCLKTCK cycles with SWDIOTMS LOW
+    DSActivationCode mDsActivationCode; // bit count >= 8 <=12. Activation Code sequence
 
-    U32 mSelectRegister;
-
-    // consts
-    static const U16 SEQUENCE_JTAG_SERIAL; // 0b0000_0000_0000 transmitted LSB first, JTAG-Serial
-    static const U8 SEQUENCE_SW_DP;        // 0b0001_1010 transmitted LSB first, ARM CoreSight SW-DP
-    static const U8 SEQUENCE_JTAG_DP;      // 0b0000_1010 transmitted LSB first, ARM CoreSight JTAG-DP
+    std::vector <std::reference_wrapper<SWDBaseSequence>> mSequences;
 
     SWDBit ParseBit();
-    void CopyBits( std::deque<SWDBit>& destination, const size_t numBits );
-    void CapureApRegData( SWDRegisters reg);
-
-    // Comparison pattern primitives
-    bool IsAtLeast( const size_t numBits, const BitState bit );
-    size_t BitCount( const BitState bit, const size_t startingFromBit = 0 );
-    // Function template for compare mBitBuffer with array of uintX_t
-    template <typename T, std::enable_if_t<std::is_integral<T>::value, bool> = true>
-    bool IsUintSequence( const T* sequence, const size_t bitCnt = sizeof( T ) * 8u )
-    {
-        bool sequenceMatched = true;
-        // make sure that the required bit count are placed in buffer
-        BufferBits( bitCnt );
-        // Check for the given sequence value, transmitted LSB first
-        for( size_t sequenceCnt = 0u; sequenceCnt < bitCnt; sequenceCnt++ )
-        {
-            size_t index = sequenceCnt / ( sizeof( T ) * 8u );
-            size_t shift = sequenceCnt % ( sizeof( T ) * 8u );
-            if( mBitsBuffer[ sequenceCnt ].IsHigh() != ( ( ( sequence[ index ] >> shift ) & 0b1 ) == 0b1 ) )
-            {
-                sequenceMatched = false;
-                break;
-            }
-        }
-        return sequenceMatched;
-    }
 
   public:
     SWDParser();
 
     void Setup( AnalyzerChannelData* pSWDIO, AnalyzerChannelData* pSWCLK, SWDAnalyzer* pAnalyzer );
     void Clear();
-    void BufferBits( const size_t numBits );
+    bool IsBufferEmpty() const;
+    void AddBitToBuffer();
+    void CopyBits( SWDBaseSequence& sequence ); // Move bits from mBitsBuffer to sequence object
 
     SwdFrameTypes GetLastFrameType() const;
     DebugProtocol GetCurrentProtocol() const;
     DPVersion GetDPVersion() const;
 
+    // Initial state setters
     void SetCurrentProtocol( DebugProtocol protocol );
     void SetLastFrameType( SwdFrameTypes frame );
     void SetDPVersion( DPVersion version );
@@ -759,52 +1218,16 @@ class SWDParser
     void SetOverrunDetection( bool enabled );
     void SetSelectRegister( U32 value );
 
-    // Compare methods
-    bool IsOperation();
-    bool IsLineReset();  // At least 50 SWCLKTCK cycles with SWDIOTMS HIGH.
-    bool IsJtagToSwd();
-    bool IsSwdToJtag();
-    bool IsIdleCycles(); // SWCLKTCK cycles with SWDIOTMS LOW.
-    bool IsJtagTlr();    // At least five SWCLKTCK cycles with SWDIOTMS HIGH.
-    bool IsJtagToDs();
-    bool IsSwdToDs();
-    bool IsDsSelectionAlertPreamble(); // At least eight SWCLKTCK cycles with SWDIOTMS HIGH.
-    bool IsDsSelectionAlert();         // Selection Alert sequence ( 128 cycles )
-    bool IsDsActivationCodePreamble(); // 4 cycles with SWDIOTMS LOW
-    bool IsDsActivationCode();
+    // Comparison method (bit by bit speculative partial comparison)
+    SeqCmpResult Match( SWDBaseSequence& sequence );
 
     // Sequence getter
-    SWDBaseSequnce& GetLineReset();
-    SWDBaseSequnce& GetJtagToSwd();
-    SWDBaseSequnce& GetSwdToJtag();
-    SWDBaseSequnce& GetOperation();
-    SWDBaseSequnce& GetIdleCycles();
-    SWDBaseSequnce& GetJtagTlr();
-    SWDBaseSequnce& GetJtagToDs();
-    SWDBaseSequnce& GetSwdToDs();
-    SWDBaseSequnce& GetDsSelectionAlertPreamble();
-    SWDBaseSequnce& GetDsSelectionAlert();
-    SWDBaseSequnce& GetDsActivationCodePreamble();
-    SWDBaseSequnce& GetDsActivationCode();
+    std::vector<std::reference_wrapper<SWDBaseSequence>>& GetSequences();
     SWDErrorBits& GetErrorBits();
-
-    // Sequence status updaters
-    void SetLineReset();
-    void SetJtagToSwd();
-    void SetSwdToJtag();
-    void SetOperation();
-    void SetIdleCycles();
-    void SetJtagTlr();
-    void SetJtagToDs();
-    void SetSwdToDs();
-    void SetDsSelectionAlertPreamble();
-    void SetDsSelectionAlert();
-    void SetDsActivationCodePreamble();
-    void SetDsActivationCode();
-
-    void SetErrorBits();
 
     SWDBit PopFrontBit();
 };
 
 #endif // SWD_TYPES_H
+
+
