@@ -12,23 +12,19 @@ class SWDAnalyzerResults : public AnalyzerResults
     SWDAnalyzerResults( SWDAnalyzer* analyzer, SWDAnalyzerSettings* settings );
     virtual ~SWDAnalyzerResults();
 
-    virtual void GenerateBubbleText( U64 frame_index, Channel& channel, DisplayBase display_base );
-    virtual void GenerateExportFile( const char* file, DisplayBase display_base, U32 export_type_user_id );
+    virtual void GenerateBubbleText( U64 frameIndex, Channel& channel, DisplayBase displayBase ) override;
+    virtual void GenerateExportFile( const char* file, DisplayBase displayBase, U32 exportTypeUserId ) override;
 
-    virtual void GenerateFrameTabularText( U64 frame_index, DisplayBase display_base );
-    virtual void GeneratePacketTabularText( U64 packet_id, DisplayBase display_base );
-    virtual void GenerateTransactionTabularText( U64 transaction_id, DisplayBase display_base );
+    virtual void GenerateFrameTabularText( U64 frameIndex, DisplayBase displayBase ) override;
+    virtual void GeneratePacketTabularText( U64 packetId, DisplayBase displayBase ) override;
+    virtual void GenerateTransactionTabularText( U64 transactionId, DisplayBase displayBase ) override;
 
     double GetSampleTime( S64 sample ) const;
     std::string GetSampleTimeStr( S64 sample ) const;
-
-    SWDAnalyzerSettings* GetSettings()
-    {
-        return mSettings;
-    }
+    SWDAnalyzerSettings* GetSettings() const;
 
   protected: // functions
-    void GetBubbleText( const Frame& f, DisplayBase display_base, std::vector<std::string>& results );
+    void GetBubbleText( const Frame& f, DisplayBase displayBase, std::vector<std::string>& results, bool onlyFirstResult );
 
   protected: // vars
     SWDAnalyzerSettings* mSettings;
